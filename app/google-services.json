@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "710615521090",
+    "project_id": "smart-ugandan-health-companion",
+    "storage_bucket": "smart-ugandan-health-companion.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:710615521090:android:069b9d2b7e29b874649adb",
+        "android_client_info": {
+          "package_name": "com.the4codexlabs.smartugandanhealthcompanionappsuhc"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDfkYrcNmGmtLEraP9vS0X-hWVVY8d3dg4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

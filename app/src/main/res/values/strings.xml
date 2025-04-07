@@ -1,0 +1,163 @@
+<resources>
+    <!-- App Name -->
+    <string name="app_name">Smart Ugandan Health Companion</string>
+    <string name="app_tagline">Your Health Companion in Uganda</string>
+    
+    <!-- Bottom Navigation -->
+    <string name="dashboard">Dashboard</string>
+    <string name="health_tracking">Health</string>
+    <string name="diagnosis">Diagnosis</string>
+    <string name="sos">SOS</string>
+    <string name="profile">Profile</string>
+    
+    <!-- Authentication -->
+    <string name="login">Login</string>
+    <string name="login_subtitle">Sign in to access your health companion</string>
+    <string name="register">Register</string>
+    <string name="email">Email</string>
+    <string name="phone">Phone Number</string>
+    <string name="password">Password</string>
+    <string name="confirm_password">Confirm Password</string>
+    <string name="forgot_password">Forgot Password?</string>
+    <string name="login_with_email">Login with Email</string>
+    <string name="login_with_phone">Login with Phone</string>
+    <string name="register_with_email">Register with Email</string>
+    <string name="register_with_phone">Register with Phone</string>
+    <string name="no_account">Don\'t have an account?</string>
+    <string name="have_account">Already have an account?</string>
+    <string name="sign_up">Sign Up</string>
+    <string name="sign_in">Sign In</string>
+    <string name="logout">Logout</string>
+    <string name="logout_confirmation">Are you sure you want to logout?</string>
+    
+    <!-- Dashboard -->
+    <string name="welcome">Welcome</string>
+    <string name="health_summary">Health Summary</string>
+    <string name="recent_vitals">Recent Vitals</string>
+    <string name="upcoming_reminders">Upcoming Reminders</string>
+    <string name="quick_actions">Quick Actions</string>
+    <string name="track_health_now">Track Health Now</string>
+    <string name="check_symptoms">Check Symptoms</string>
+    <string name="emergency_sos">Emergency SOS</string>
+    <string name="set_reminder">Set Reminder</string>
+    
+    <!-- Health Tracking -->
+    <string name="track_vitals">Track Vitals</string>
+    <string name="blood_pressure">Blood Pressure</string>
+    <string name="blood_sugar">Blood Sugar</string>
+    <string name="weight">Weight</string>
+    <string name="mood">Mood</string>
+    <string name="water_intake">Water Intake</string>
+    <string name="systolic">Systolic</string>
+    <string name="diastolic">Diastolic</string>
+    <string name="mmHg">mmHg</string>
+    <string name="mg_dl">mg/dL</string>
+    <string name="kg">kg</string>
+    <string name="glasses">glasses</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="health_history">Health History</string>
+    <string name="view_charts">View Charts</string>
+    <string name="export_pdf">Export PDF Report</string>
+    
+    <!-- Mood Options -->
+    <string name="mood_great">Great</string>
+    <string name="mood_good">Good</string>
+    <string name="mood_okay">Okay</string>
+    <string name="mood_bad">Bad</string>
+    <string name="mood_terrible">Terrible</string>
+    
+    <!-- Diagnosis -->
+    <string name="symptom_checker">Symptom Checker</string>
+    <string name="enter_symptoms">Enter your symptoms</string>
+    <string name="add_symptom">Add Symptom</string>
+    <string name="symptom_duration">How long have you had these symptoms?</string>
+    <string name="check_diagnosis">Check Diagnosis</string>
+    <string name="diagnosis_results">Diagnosis Results</string>
+    <string name="possible_condition">Possible Condition</string>
+    <string name="recommendation">Recommendation</string>
+    <string name="confidence">Confidence</string>
+    <string name="disclaimer">Disclaimer: This is not a medical diagnosis. Please consult a healthcare professional.</string>
+    
+    <!-- SOS -->
+    <string name="sos_emergency">SOS Emergency</string>
+    <string name="press_for_sos">Press and hold for 3 seconds to activate SOS</string>
+    <string name="sos_activated">SOS Activated!</string>
+    <string name="sos_sending">Sending your location to emergency contacts</string>
+    <string name="sos_cancel">Cancel SOS</string>
+    <string name="nearby_hospitals">Nearby Hospitals</string>
+    <string name="emergency_contacts">Emergency Contacts</string>
+    <string name="add_emergency_contact">Add Emergency Contact</string>
+    <string name="contact_name">Contact Name</string>
+    <string name="contact_phone">Contact Phone</string>
+    <string name="contact_relationship">Relationship</string>
+    
+    <!-- Profile -->
+    <string name="personal_info">Personal Information</string>
+    <string name="name">Name</string>
+    <string name="age">Age</string>
+    <string name="gender">Gender</string>
+    <string name="blood_type">Blood Type</string>
+    <string name="allergies">Allergies</string>
+    <string name="medical_conditions">Medical Conditions</string>
+    <string name="medications">Medications</string>
+    <string name="language">Language</string>
+    <string name="theme">Theme</string>
+    <string name="notifications">Notifications</string>
+    <string name="privacy">Privacy</string>
+    <string name="about">About</string>
+    <string name="help">Help</string>
+    <string name="edit_profile">Edit Profile</string>
+    <string name="save_changes">Save Changes</string>
+    <string name="generate_medical_id">Generate Medical ID QR</string>
+    
+    <!-- Language Options -->
+    <string name="english">English</string>
+    <string name="luganda">Luganda</string>
+    <string name="runyankole">Runyankole</string>
+    
+    <!-- Theme Options -->
+    <string name="light_mode">Light Mode</string>
+    <string name="dark_mode">Dark Mode</string>
+    <string name="system_default">System Default</string>
+    
+    <!-- Notifications -->
+    <string name="daily_reminder">Daily Health Check-in Reminder</string>
+    <string name="medication_reminder">Medication Reminder</string>
+    <string name="water_reminder">Water Intake Reminder</string>
+    <string name="appointment_reminder">Appointment Reminder</string>
+    
+    <!-- Error Messages -->
+    <string name="error_login">Login failed. Please check your credentials.</string>
+    <string name="error_register">Registration failed. Please try again.</string>
+    <string name="error_network">Network error. Please check your connection.</string>
+    <string name="error_unknown">An unknown error occurred. Please try again.</string>
+    <string name="error_field_required">This field is required</string>
+    <string name="error_invalid_email">Invalid email address</string>
+    <string name="error_invalid_phone">Invalid phone number</string>
+    <string name="error_password_short">Password must be at least 6 characters</string>
+    <string name="error_passwords_dont_match">Passwords don\'t match</string>
+    
+    <!-- Success Messages -->
+    <string name="success_login">Login successful!</string>
+    <string name="success_register">Registration successful!</string>
+    <string name="success_save">Data saved successfully!</string>
+    <string name="success_update">Profile updated successfully!</string>
+    <string name="success_password_reset">Password reset email sent!</string>
+    
+    <!-- Health Tracking Messages -->
+    <string name="data_saved_successfully">Health data saved successfully!</string>
+    <string name="error_saving_data">Error saving health data. Please try again.</string>
+    <string name="charts_coming_soon">Charts feature coming soon!</string>
+    <string name="pdf_export_coming_soon">PDF export feature coming soon!</string>
+    <string name="error_blood_pressure_required">Blood pressure is required</string>
+    <string name="error_blood_sugar_required">Blood sugar is required</string>
+    <string name="error_weight_required">Weight is required</string>
+    
+    <!-- Misc -->
+    <string name="loading">Loading…</string>
+    <string name="retry">Retry</string>
+    <string name="yes">Yes</string>
+    <string name="no">No</string>
+    <string name="ok">OK</string>
+</resources>

@@ -1,0 +1,152 @@
+<resources>
+    <!-- App Name -->
+    <string name="app_name">Omuhwezi w\'Amagara omu Uganda</string>
+    <string name="app_tagline">Omuhwezi waawe w\'Amagara omu Uganda</string>
+    
+    <!-- Bottom Navigation -->
+    <string name="dashboard">Dashboodi</string>
+    <string name="health_tracking">Amagara</string>
+    <string name="diagnosis">Okucondooza</string>
+    <string name="sos">Obuyambi</string>
+    <string name="profile">Ebirikukukwataho</string>
+    
+    <!-- Authentication -->
+    <string name="login">Shemurura</string>
+    <string name="register">Yeyandikise</string>
+    <string name="email">Imeyiro</string>
+    <string name="phone">Namba y\'Esimu</string>
+    <string name="password">Ekigambo ky\'Ekihama</string>
+    <string name="confirm_password">Kaasa Ekigambo ky\'Ekihama</string>
+    <string name="forgot_password">Waayebwa Ekigambo ky\'Ekihama?</string>
+    <string name="login_with_email">Shemurura n\'Imeyiro</string>
+    <string name="login_with_phone">Shemurura n\'Esimu</string>
+    <string name="register_with_email">Yeyandikise n\'Imeyiro</string>
+    <string name="register_with_phone">Yeyandikise n\'Esimu</string>
+    <string name="no_account">Torine akawunti?</string>
+    <string name="have_account">Oine akawunti?</string>
+    <string name="sign_up">Yeyandikise</string>
+    <string name="sign_in">Shemurura</string>
+    <string name="logout">Ruga</string>
+    
+    <!-- Dashboard -->
+    <string name="welcome">Tukwakiire</string>
+    <string name="health_summary">Amakuru g\'Amagara</string>
+    <string name="recent_vitals">Ebipimo by\'Aha Hati</string>
+    <string name="upcoming_reminders">Ebirikwija Kukwijukya</string>
+    <string name="quick_actions">Ebikorwa by\'Ahonaaho</string>
+    <string name="track_health_now">Pima Amagara Hati</string>
+    <string name="check_symptoms">Condooza Obumanyiso</string>
+    <string name="emergency_sos">Obuyambi bw\'Amangu</string>
+    <string name="set_reminder">Taho Ekijukizo</string>
+    
+    <!-- Health Tracking -->
+    <string name="track_vitals">Pima Amagara</string>
+    <string name="blood_pressure">Omusingi gw\'Eshagama</string>
+    <string name="blood_sugar">Shukaari omu Shagama</string>
+    <string name="weight">Obuzito</string>
+    <string name="mood">Embeera</string>
+    <string name="water_intake">Amaizi Aganywerwe</string>
+    <string name="systolic">Sisitoliki</string>
+    <string name="diastolic">Dayasitoliki</string>
+    <string name="mmHg">mmHg</string>
+    <string name="mg_dl">mg/dL</string>
+    <string name="kg">kg</string>
+    <string name="glasses">ebikoopo</string>
+    <string name="save">Biike</string>
+    <string name="cancel">Sazamu</string>
+    <string name="health_history">Ebyafaayo by\'Amagara</string>
+    <string name="view_charts">Reeba Ebipande</string>
+    <string name="export_pdf">Ohereza Ripoota ya PDF</string>
+    
+    <!-- Mood Options -->
+    <string name="mood_great">Kirungi Munonga</string>
+    <string name="mood_good">Kirungi</string>
+    <string name="mood_okay">Nikihika</string>
+    <string name="mood_bad">Kibi</string>
+    <string name="mood_terrible">Kibi Munonga</string>
+    
+    <!-- Diagnosis -->
+    <string name="symptom_checker">Okucondooza Obumanyiso</string>
+    <string name="enter_symptoms">Yingiza obumanyiso bwawe</string>
+    <string name="add_symptom">Yongyeraho Akamanyiso</string>
+    <string name="symptom_duration">Obumanyiso obu bwamara obwire bwingahi?</string>
+    <string name="check_diagnosis">Condooza Endwara</string>
+    <string name="diagnosis_results">Ebyarugire omu Kucondooza</string>
+    <string name="possible_condition">Endwara Erikubaasa Kuba</string>
+    <string name="recommendation">Amagezi</string>
+    <string name="confidence">Okwesiga</string>
+    <string name="disclaimer">Okurinda: Eki tikirikumanyisa ngu nendwara. Noshaba kuza aha mushaho.</string>
+    
+    <!-- SOS -->
+    <string name="sos_emergency">Obuyambi bw\'Amangu</string>
+    <string name="press_for_sos">Nyiga kumara sikonda 3 kukora obuyambi</string>
+    <string name="sos_activated">Obuyambi Bwakozirwe!</string>
+    <string name="sos_sending">Nitutuma ahu ori aha b\'obuyambi</string>
+    <string name="sos_cancel">Sazamu Obuyambi</string>
+    <string name="nearby_hospitals">Amarwariro Agari Haihi</string>
+    <string name="emergency_contacts">Namba z\'Obuyambi</string>
+    <string name="add_emergency_contact">Yongyeraho Namba y\'Obuyambi</string>
+    <string name="contact_name">Eiziina</string>
+    <string name="contact_phone">Namba y\'Esimu</string>
+    <string name="contact_relationship">Enkoragana</string>
+    
+    <!-- Profile -->
+    <string name="personal_info">Ebirikukukwataho</string>
+    <string name="name">Eiziina</string>
+    <string name="age">Emyaka</string>
+    <string name="gender">Ekikura</string>
+    <string name="blood_type">Omutaano gw\'Eshagama</string>
+    <string name="allergies">Ebirikukurwaza</string>
+    <string name="medical_conditions">Endwara</string>
+    <string name="medications">Emiringo</string>
+    <string name="language">Orurimi</string>
+    <string name="theme">Endabika</string>
+    <string name="notifications">Obutumwa</string>
+    <string name="privacy">Ebihama</string>
+    <string name="about">Ebikwatsireho</string>
+    <string name="help">Obuyambi</string>
+    <string name="edit_profile">Hindura Ebirikukukwataho</string>
+    <string name="save_changes">Biika Empinduka</string>
+    <string name="generate_medical_id">Kora QR y\'Ebirikukukwataho</string>
+    
+    <!-- Language Options -->
+    <string name="english">Orungyereza</string>
+    <string name="luganda">Oruganda</string>
+    <string name="runyankole">Orunyankore</string>
+    
+    <!-- Theme Options -->
+    <string name="light_mode">Ekitangaara</string>
+    <string name="dark_mode">Omwirima</string>
+    <string name="system_default">Ekya Kompyuta</string>
+    
+    <!-- Notifications -->
+    <string name="daily_reminder">Ekijukizo ky\'Amagara kya Buri Izooba</string>
+    <string name="medication_reminder">Ekijukizo ky\'Emiringo</string>
+    <string name="water_reminder">Ekijukizo ky\'Amaizi</string>
+    <string name="appointment_reminder">Ekijukizo ky\'Okukyara</string>
+    
+    <!-- Error Messages -->
+    <string name="error_login">Okushemurura kwangirwe. Reeba ebirikukukwataho.</string>
+    <string name="error_register">Okweyandikisa kwangirwe. Gezaaho ogundi murundi.</string>
+    <string name="error_network">Hariho kizibu omu network. Reeba okukoragana kwawe.</string>
+    <string name="error_unknown">Hariho kizibu ekitarikumanywa. Gezaaho ogundi murundi.</string>
+    <string name="error_field_required">Eki nikeetaagisa</string>
+    <string name="error_invalid_email">Imeyiro etahikire</string>
+    <string name="error_invalid_phone">Namba y\'esimu etahikire</string>
+    <string name="error_password_short">Ekigambo ky\'ekihama nikiteekwa kuba n\'enyongyeza 6 nari okukira</string>
+    <string name="error_passwords_dont_match">Ebigambo by\'ekihama tibirikushushana</string>
+    
+    <!-- Success Messages -->
+    <string name="success_login">Washemurukire kurungi!</string>
+    <string name="success_register">Weyandikisire kurungi!</string>
+    <string name="success_save">Amakuru gabiikire kurungi!</string>
+    <string name="success_update">Ebirikukukwataho bihindwirwe kurungi!</string>
+    <string name="success_password_reset">Imeyiro y\'okuhindura ekigambo ky\'ekihama etumirwe!</string>
+    
+    <!-- Misc -->
+    <string name="loading">Nitwetegyereza…</string>
+    <string name="retry">Gezaaho ogundi murundi</string>
+    <string name="yes">Eego</string>
+    <string name="no">Ngaaha</string>
+    <string name="ok">Kare</string>
+</resources>
