@@ -1,6 +1,7 @@
 <resources>
     <!-- App Name -->
     <string name="app_name">Smart Ugandan Health Companion</string>
+    <string name="app_short">SUHC</string>
     <string name="app_tagline">Your Health Companion in Uganda</string>
     
     <!-- Bottom Navigation -->
