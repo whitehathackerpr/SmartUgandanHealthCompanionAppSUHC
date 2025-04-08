@@ -6,7 +6,7 @@
     
     <!-- Bottom Navigation -->
     <string name="dashboard">Dashboard</string>
-    <string name="health_tracking">Health</string>
+    <string name="health_tracking">Health Tracking</string>
     <string name="diagnosis">Diagnosis</string>
     <string name="sos">SOS</string>
     <string name="profile">Profile</string>
@@ -128,6 +128,9 @@
     <string name="water_reminder">Water Intake Reminder</string>
     <string name="appointment_reminder">Appointment Reminder</string>
     
+    <!-- Firebase -->
+    <string name="default_notification_channel_id">suhc_default_channel</string>
+    
     <!-- Error Messages -->
     <string name="error_login">Login failed. Please check your credentials.</string>
     <string name="error_register">Registration failed. Please try again.</string>
@@ -138,6 +141,9 @@
     <string name="error_invalid_phone">Invalid phone number</string>
     <string name="error_password_short">Password must be at least 6 characters</string>
     <string name="error_passwords_dont_match">Passwords don\'t match</string>
+    <string name="network_error">Network connection issue. Please check your internet and try again.</string>
+    <string name="general_error">Something went wrong. Please try again later.</string>
+    <string name="login_error">Unable to log in. Please check your credentials and try again.</string>
     
     <!-- Success Messages -->
     <string name="success_login">Login successful!</string>
@@ -145,6 +151,9 @@
     <string name="success_save">Data saved successfully!</string>
     <string name="success_update">Profile updated successfully!</string>
     <string name="success_password_reset">Password reset email sent!</string>
+    <string name="login_success">Successfully logged in!</string>
+    <string name="profile_updated">Profile updated successfully!</string>
+    <string name="data_saved">Data saved successfully!</string>
     
     <!-- Health Tracking Messages -->
     <string name="data_saved_successfully">Health data saved successfully!</string>
@@ -161,4 +170,13 @@
     <string name="yes">Yes</string>
     <string name="no">No</string>
     <string name="ok">OK</string>
+    
+    <!-- Action Strings -->
+    <string name="edit">Edit</string>
+    <string name="delete">Delete</string>
+    <string name="confirm">Confirm</string>
+    <string name="add">Add</string>
+    <string name="search">Search</string>
+    <string name="view_all">View All</string>
+    <string name="view_details">View Details</string>
 </resources>

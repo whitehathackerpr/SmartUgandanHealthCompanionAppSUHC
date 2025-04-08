@@ -1,12 +1,15 @@
 package com.the4codexlabs.smartugandanhealthcompanionappsuhc.services
 
+import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.media.RingtoneManager
+import android.os.Build
 import android.util.Log
 import androidx.core.app.NotificationCompat
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.messaging.FirebaseMessagingService
 import com.google.firebase.messaging.RemoteMessage
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.MainActivity
@@ -14,9 +17,12 @@ import com.the4codexlabs.smartugandanhealthcompanionappsuhc.R
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.SUHCApplication.Companion.CHANNEL_GENERAL
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.SUHCApplication.Companion.CHANNEL_REMINDERS
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.SUHCApplication.Companion.CHANNEL_SOS
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.data.repository.NotificationsRepository
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.NotificationType
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Service to handle Firebase Cloud Messaging (FCM) messages.
@@ -24,38 +30,26 @@ import kotlinx.coroutines.launch
  */
 class SUHCFirebaseMessagingService : FirebaseMessagingService() {
 
+    private val notificationIdSource = AtomicInteger(0)
+    private val notificationsRepository = NotificationsRepository()
+
     /**
      * Called when a message is received.
      * @param remoteMessage The message received from Firebase Cloud Messaging.
      */
     override fun onMessageReceived(remoteMessage: RemoteMessage) {
-        Log.d(TAG, "From: ${remoteMessage.from}")
-
-        // Check if message contains a data payload
-        remoteMessage.data.isNotEmpty().let {
-            Log.d(TAG, "Message data payload: ${remoteMessage.data}")
-            
-            // Get notification type from data
-            val notificationType = remoteMessage.data["type"] ?: "general"
-            
-            // Handle the received data based on type
-            handleNotification(
-                remoteMessage.data["title"] ?: "Health Companion",
-                remoteMessage.data["message"] ?: "You have a new notification",
-                notificationType
-            )
-        }
-
+        super.onMessageReceived(remoteMessage)
+        
         // Check if message contains a notification payload
-        remoteMessage.notification?.let {
-            Log.d(TAG, "Message Notification Body: ${it.body}")
+        remoteMessage.notification?.let { notification ->
+            val title = notification.title ?: "SUHC Notification"
+            val body = notification.body ?: "You have a new notification"
             
-            // Handle the notification payload
-            handleNotification(
-                it.title ?: "Health Companion",
-                it.body ?: "You have a new notification",
-                "general"
-            )
+            // Show notification
+            sendNotification(title, body)
+            
+            // Save to Firestore if user is logged in
+            saveNotificationToFirestore(title, body, remoteMessage.data)
         }
     }
 
@@ -64,103 +58,83 @@ class SUHCFirebaseMessagingService : FirebaseMessagingService() {
      * @param token The new FCM registration token.
      */
     override fun onNewToken(token: String) {
-        Log.d(TAG, "Refreshed token: $token")
+        super.onNewToken(token)
         
-        // Send the new token to your server for targeting this device
-        sendRegistrationToServer(token)
+        // If you want to send messages to this application instance or
+        // manage this app's subscriptions on the server side, send the
+        // FCM registration token to your app server.
+        // For now, we'll just log it
+        sendTokenToServer(token)
     }
 
-    /**
-     * Handle showing the notification to the user.
-     * @param title The notification title.
-     * @param messageBody The notification message body.
-     * @param type The type of notification (sos, reminder, or general).
-     */
-    private fun handleNotification(title: String, messageBody: String, type: String) {
-        val intent = Intent(this, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra("notification_type", type)
-        }
+    private fun sendTokenToServer(token: String) {
+        // Implement token sending to your server if needed
+        // For now, just log it or handle locally
+    }
+
+    private fun sendNotification(title: String, body: String) {
+        val intent = Intent(this, MainActivity::class.java)
+        intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP)
         
         val pendingIntent = PendingIntent.getActivity(
             this, 0, intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_ONE_SHOT
+            PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE
         )
-
-        val channelId = when (type) {
-            "sos" -> CHANNEL_SOS
-            "reminder" -> CHANNEL_REMINDERS
-            else -> CHANNEL_GENERAL
-        }
         
+        val channelId = getString(R.string.default_notification_channel_id)
         val defaultSoundUri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+        
         val notificationBuilder = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
-            .setContentText(messageBody)
+            .setContentText(body)
             .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setSound(defaultSoundUri)
             .setContentIntent(pendingIntent)
-            
-        // Set high priority for SOS notifications
-        if (type == "sos") {
-            notificationBuilder.priority = NotificationCompat.PRIORITY_HIGH
-        }
-
-        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(getNotificationId(type), notificationBuilder.build())
-    }
-
-    /**
-     * Generate a notification ID based on the notification type.
-     * This ensures different types of notifications don't override each other.
-     */
-    private fun getNotificationId(type: String): Int {
-        return when (type) {
-            "sos" -> SOS_NOTIFICATION_ID
-            "reminder" -> REMINDER_NOTIFICATION_ID
-            else -> (System.currentTimeMillis() % 10000).toInt()
-        }
-    }
-
-    /**
-     * Send the FCM registration token to your server.
-     * @param token The FCM registration token.
-     */
-    private fun sendRegistrationToServer(token: String) {
-        // Save token to Firestore for the current user
-        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser
         
-        if (currentUser != null) {
-            val userId = currentUser.uid
-            val tokenData = hashMapOf(
-                "token" to token,
-                "platform" to "android",
-                "updatedAt" to com.google.firebase.Timestamp.now()
-            )
-            
-            // Use coroutine to perform the Firestore operation
-            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        
+        // Create the notification channel for Android Oreo and above
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(
+                channelId,
+                "SUHC Notification Channel",
+                NotificationManager.IMPORTANCE_HIGH
+            ).apply {
+                description = "Smart Ugandan Health Companion notifications"
+                enableLights(true)
+                enableVibration(true)
+            }
+            notificationManager.createNotificationChannel(channel)
+        }
+        
+        notificationManager.notify(notificationIdSource.incrementAndGet(), notificationBuilder.build())
+    }
+    
+    private fun saveNotificationToFirestore(title: String, body: String, data: Map<String, String>) {
+        // Only save if user is logged in
+        if (FirebaseAuth.getInstance().currentUser != null) {
+            CoroutineScope(Dispatchers.IO).launch {
                 try {
-                    // Save token to user's document
-                    com.google.firebase.firestore.FirebaseFirestore.getInstance()
-                        .collection("users")
-                        .document(userId)
-                        .collection("fcm_tokens")
-                        .document(token)
-                        .set(tokenData)
-                        .addOnSuccessListener {
-                            Log.d(TAG, "FCM token successfully saved to Firestore")
-                        }
-                        .addOnFailureListener { e ->
-                            Log.e(TAG, "Error saving FCM token to Firestore", e)
-                        }
+                    // Parse notification type from data
+                    val typeString = data["type"] ?: "GENERAL"
+                    val type = try {
+                        NotificationType.valueOf(typeString)
+                    } catch (e: IllegalArgumentException) {
+                        NotificationType.GENERAL
+                    }
+                    
+                    // Save notification to Firestore
+                    notificationsRepository.addNotification(
+                        title = title,
+                        message = body,
+                        type = type
+                    )
                 } catch (e: Exception) {
-                    Log.e(TAG, "Error in sendRegistrationToServer", e)
+                    // Handle error
                 }
             }
-        } else {
-            Log.d(TAG, "User not logged in, FCM token not saved: $token")
         }
     }
 

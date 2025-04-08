@@ -51,7 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.R
-import com.the4codexlabs.smartugandanhealthcompanionappsuhc.Screen
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.main.Screen
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.SmartUgandanHealthCompanionAppSUHCTheme
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.SOSRed
 
@@ -80,9 +80,9 @@ fun DashboardScreen(navController: NavController) {
     ) { paddingValues ->
         DashboardContent(
             paddingValues = paddingValues,
-            onHealthTrackingClick = { navController.navigate(Screen.HealthTracking.route) },
-            onDiagnosisClick = { navController.navigate(Screen.Diagnosis.route) },
-            onSOSClick = { navController.navigate(Screen.SOS.route) },
+                onHealthTrackingClick = { navController.navigate(Screen.HealthRecords.route) },
+                onDiagnosisClick = { navController.navigate(Screen.SymptomTracker.route) },
+                onSOSClick = { navController.navigate(Screen.Community.route) },
             onReminderClick = { /* TODO: Implement reminder dialog */ }
         )
     }
