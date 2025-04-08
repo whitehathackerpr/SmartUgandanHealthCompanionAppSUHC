@@ -3,26 +3,31 @@ package com.the4codexlabs.smartugandanhealthcompanionappsuhc.data.repository
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.Symptom
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.data.model.Symptom
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.Symptom as EnhancedSymptom
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.tasks.await
 import java.util.*
 import java.util.concurrent.TimeUnit
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class SymptomRepository {
-    private val auth = FirebaseAuth.getInstance()
-    private val firestore = FirebaseFirestore.getInstance()
-    
+@Singleton
+class SymptomRepository @Inject constructor(
+    private val auth: FirebaseAuth,
+    private val firestore: FirebaseFirestore
+) {
     private val userId: String
         get() = auth.currentUser?.uid ?: throw IllegalStateException("User not authenticated")
     
-    private val symptomsCollection
-        get() = firestore.collection("users").document(userId).collection("symptoms")
+    private val symptomsCollection = firestore.collection("symptoms")
     
     // Get all symptoms
-    fun getSymptoms(): Flow<List<Symptom>> = callbackFlow {
+    fun getSymptoms(): Flow<List<EnhancedSymptom>> = callbackFlow {
         val subscription = symptomsCollection
             .orderBy("date", Query.Direction.DESCENDING)
             .addSnapshotListener { snapshot, error ->
@@ -34,7 +39,7 @@ class SymptomRepository {
                 if (snapshot != null) {
                     val symptoms = snapshot.documents.mapNotNull { doc ->
                         try {
-                            doc.toObject(Symptom::class.java)?.copy(id = doc.id)
+                            doc.toObject(EnhancedSymptom::class.java)?.copy(id = doc.id)
                         } catch (e: Exception) {
                             null
                         }
@@ -47,7 +52,7 @@ class SymptomRepository {
     }
     
     // Get symptoms within a time range
-    fun getSymptomsByTimeRange(period: String): Flow<List<Symptom>> = callbackFlow {
+    fun getSymptomsByTimeRange(period: String): Flow<List<EnhancedSymptom>> = callbackFlow {
         val calendar = Calendar.getInstance()
         val endDate = calendar.time
         
@@ -87,7 +92,7 @@ class SymptomRepository {
             if (snapshot != null) {
                 val symptoms = snapshot.documents.mapNotNull { doc ->
                     try {
-                        doc.toObject(Symptom::class.java)?.copy(id = doc.id)
+                        doc.toObject(EnhancedSymptom::class.java)?.copy(id = doc.id)
                     } catch (e: Exception) {
                         null
                     }
@@ -100,17 +105,17 @@ class SymptomRepository {
     }
     
     // Get symptom by ID
-    suspend fun getSymptomById(symptomId: String): Symptom? {
+    suspend fun getSymptomById(symptomId: String): EnhancedSymptom? {
         return try {
             val doc = symptomsCollection.document(symptomId).get().await()
-            doc.toObject(Symptom::class.java)?.copy(id = doc.id)
+            doc.toObject(EnhancedSymptom::class.java)?.copy(id = doc.id)
         } catch (e: Exception) {
             null
         }
     }
     
     // Add or update symptom
-    suspend fun saveSymptom(symptom: Symptom): String {
+    suspend fun saveSymptom(symptom: EnhancedSymptom): String {
         val symptomId = symptom.id.takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString()
         val symptomWithId = symptom.copy(id = symptomId)
         
@@ -119,8 +124,26 @@ class SymptomRepository {
     }
     
     // Delete symptom
-    suspend fun deleteSymptom(symptomId: String) {
-        symptomsCollection.document(symptomId).delete().await()
+    suspend fun deleteSymptom(symptomId: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            // Verify the symptom belongs to the current user
+            val userId = auth.currentUser?.uid ?: throw IllegalStateException("User not authenticated")
+            val symptom = symptomsCollection.document(symptomId).get().await()
+                .toObject(EnhancedSymptom::class.java)
+                ?: throw IllegalStateException("Symptom not found")
+            
+            if (symptom.userId != userId) {
+                throw IllegalStateException("Unauthorized to delete this symptom")
+            }
+            
+            symptomsCollection.document(symptomId)
+                .delete()
+                .await()
+            
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
     }
     
     // Get symptom summary statistics
@@ -155,7 +178,7 @@ class SymptomRepository {
         val snapshot = query.get().await()
         val symptoms = snapshot.documents.mapNotNull { doc ->
             try {
-                doc.toObject(Symptom::class.java)
+                doc.toObject(EnhancedSymptom::class.java)
             } catch (e: Exception) {
                 null
             }

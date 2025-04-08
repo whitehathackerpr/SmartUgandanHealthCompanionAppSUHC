@@ -102,6 +102,15 @@ class HealthRecordsViewModel : ViewModel() {
         loadHealthRecords()
     }
 
+    fun showAddRecordDialog(show: Boolean, record: HealthRecord? = null) {
+        _uiState.update { 
+            it.copy(
+                showAddRecordDialog = show,
+                recordToEdit = if (show) record else null
+            ) 
+        }
+    }
+
     fun addHealthRecord(
         title: String,
         type: RecordType,
@@ -112,42 +121,46 @@ class HealthRecordsViewModel : ViewModel() {
         attachments: List<String> = emptyList()
     ) {
         if (title.isBlank()) return
-
+        
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, showAddRecordDialog = false) }
+            _uiState.update { it.copy(isLoading = true) }
             try {
-                val record = _uiState.value.recordToEdit?.copy(
-                    title = title,
-                    type = type,
-                    date = date,
-                    description = description,
-                    doctor = doctor,
-                    location = location,
-                    attachments = attachments
-                ) ?: HealthRecord(
-                    title = title,
-                    type = type,
-                    date = date,
-                    description = description,
-                    doctor = doctor,
-                    location = location,
-                    attachments = attachments
-                )
+                val recordToEdit = _uiState.value.recordToEdit
                 
-                if (record.id.isEmpty()) {
-                    repository.addHealthRecord(record)
+                if (recordToEdit != null) {
+                    // Update existing record
+                    repository.updateHealthRecord(
+                        recordToEdit.copy(
+                            title = title,
+                            type = type,
+                            date = date,
+                            description = description,
+                            doctor = doctor,
+                            location = location,
+                            attachments = attachments
+                        )
+                    )
                 } else {
-                    repository.updateHealthRecord(record)
+                    // Create new record
+                    repository.addHealthRecord(
+                        title = title,
+                        type = type,
+                        date = date,
+                        description = description,
+                        doctor = doctor,
+                        location = location,
+                        attachments = attachments
+                    )
                 }
                 
                 _uiState.update { 
                     it.copy(
                         isLoading = false,
+                        showAddRecordDialog = false,
                         recordToEdit = null,
                         error = null
                     ) 
                 }
-                // Records will be automatically updated via Flow
             } catch (e: Exception) {
                 _uiState.update { 
                     it.copy(
@@ -161,23 +174,23 @@ class HealthRecordsViewModel : ViewModel() {
 
     fun deleteHealthRecord(recordId: String) {
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
             try {
                 repository.deleteHealthRecord(recordId)
-                // Records will be automatically updated via Flow
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        error = null
+                    ) 
+                }
             } catch (e: Exception) {
                 _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to delete health record") 
+                    it.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to delete health record"
+                    ) 
                 }
             }
-        }
-    }
-
-    fun showAddRecordDialog(show: Boolean, recordToEdit: HealthRecord? = null) {
-        _uiState.update { 
-            it.copy(
-                showAddRecordDialog = show,
-                recordToEdit = recordToEdit
-            ) 
         }
     }
 

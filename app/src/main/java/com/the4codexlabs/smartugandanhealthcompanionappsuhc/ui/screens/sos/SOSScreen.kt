@@ -108,6 +108,16 @@ data class EmergencyContact(
 )
 
 /**
+ * Data class representing a nearby hospital.
+ */
+data class NearbyHospital(
+    val name: String,
+    val distance: String,
+    val address: String,
+    val phone: String
+)
+
+/**
  * SOS Emergency screen composable.
  * Allows users to trigger an emergency alert and send their location to emergency contacts.
  */
@@ -143,7 +153,11 @@ fun SOSScreen(navController: NavController) {
             )
         }
     ) { paddingValues ->
-        SOSContent(paddingValues = paddingValues)
+        SOSContent(
+            paddingValues = paddingValues,
+            onNavigateBack = { navController.navigateUp() },
+            onNavigateToHealthcareMap = { navController.navigate("healthcare_map") }
+        )
     }
 }
 
@@ -151,7 +165,11 @@ fun SOSScreen(navController: NavController) {
  * SOS content composable.
  */
 @Composable
-fun SOSContent(paddingValues: PaddingValues) {
+fun SOSContent(
+    paddingValues: PaddingValues,
+    onNavigateBack: () -> Unit,
+    onNavigateToHealthcareMap: () -> Unit
+) {
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val isDarkTheme = isSystemInDarkTheme()
@@ -160,11 +178,17 @@ fun SOSContent(paddingValues: PaddingValues) {
     var isSosActive by remember { mutableStateOf(false) }
     var sosButtonPressStartTime by remember { mutableLongStateOf(0L) }
     var sosButtonPressed by remember { mutableStateOf(false) }
+    var showCancelDialog by remember { mutableStateOf(false) }
+    var pressProgress by remember { mutableStateOf(0f) }
     
     // Emergency contacts state
     var emergencyContacts by remember { mutableStateOf<List<EmergencyContact>>(emptyList()) }
     var isLoadingContacts by remember { mutableStateOf(true) }
     var showAddContactDialog by remember { mutableStateOf(false) }
+    
+    // Nearby hospitals state
+    var nearbyHospitals by remember { mutableStateOf<List<NearbyHospital>>(emptyList()) }
+    var isLoadingHospitals by remember { mutableStateOf(true) }
     
     // Fetch emergency contacts from Firestore
     LaunchedEffect(key1 = true) {
@@ -191,10 +215,34 @@ fun SOSContent(paddingValues: PaddingValues) {
                     emergencyContacts = emptyList()
                     isLoadingContacts = false
                 }
+                
+            // Fetch nearby hospitals
+            FirebaseFirestore.getInstance().collection("health_facilities")
+                .limit(3)
+                .get()
+                .addOnSuccessListener { documents ->
+                    val hospitals = documents.map { document ->
+                        NearbyHospital(
+                            name = document.getString("name") ?: "Unknown Hospital",
+                            distance = document.getString("distance") ?: "Unknown distance",
+                            address = document.getString("address") ?: "Unknown address",
+                            phone = document.getString("phone") ?: ""
+                        )
+                    }
+                    nearbyHospitals = hospitals
+                    isLoadingHospitals = false
+                }
+                .addOnFailureListener {
+                    // Use empty list on failure
+                    nearbyHospitals = emptyList()
+                    isLoadingHospitals = false
+                }
         } else {
             // Not logged in, use empty list
             emergencyContacts = emptyList()
             isLoadingContacts = false
+            nearbyHospitals = emptyList()
+            isLoadingHospitals = false
         }
     }
     
@@ -252,148 +300,250 @@ fun SOSContent(paddingValues: PaddingValues) {
                     .fillMaxWidth()
                     .padding(24.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(24.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // SOS Button
                 Box(
                     modifier = Modifier
-                        .padding(vertical = 32.dp),
+                        .size(if (isSosActive) 180.dp else 160.dp)
+                        .scale(if (isSosActive) scale else 1f)
+                        .shadow(
+                            elevation = if (isSosActive) LargeElevation else MediumElevation,
+                            shape = SOSButtonShape
+                        )
+                        .clip(SOSButtonShape)
+                        .background(
+                            brush = Brush.radialGradient(
+                                colors = if (isSosActive) {
+                                    listOf(
+                                        SOSRed,
+                                        SOSRed.copy(alpha = 0.9f)
+                                    )
+                                } else {
+                                    listOf(
+                                        SOSRed.copy(alpha = 0.9f),
+                                        SOSRed.copy(alpha = 0.7f)
+                                    )
+                                }
+                            )
+                        )
+                        .clickable(
+                            enabled = !isSosActive,
+                            onClick = {
+                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                                sosButtonPressed = true
+                                sosButtonPressStartTime = System.currentTimeMillis()
+                            }
+                        ),
                     contentAlignment = Alignment.Center
                 ) {
-                    // Outer glow effect
+                    // Glow effect
                     if (isSosActive) {
                         Box(
                             modifier = Modifier
-                                .size(220.dp)
-                                .scale(scale)
+                                .size(200.dp)
                                 .background(
                                     brush = Brush.radialGradient(
                                         colors = listOf(
                                             SOSRed.copy(alpha = glowOpacity * 0.3f),
                                             SOSRed.copy(alpha = 0f)
                                         )
-                                    ),
-                                    shape = CircleShape
+                                    )
                                 )
                         )
                     }
                     
                     // SOS Button
-                    Surface(
+                    Box(
                         modifier = Modifier
                             .size(if (isSosActive) 180.dp else 160.dp)
                             .scale(if (isSosActive) scale else 1f)
                             .shadow(
                                 elevation = if (isSosActive) LargeElevation else MediumElevation,
-                                shape = CircleShape
+                                shape = SOSButtonShape
                             )
-                            .clickable {
-                                if (!isSosActive) {
-                                    haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    sosButtonPressed = true
-                                    sosButtonPressStartTime = System.currentTimeMillis()
-                                }
-                            },
-                        shape = CircleShape,
-                        color = if (isSosActive) {
-                            SOSRed
-                        } else {
-                            SOSRed.copy(alpha = 0.9f)
-                        },
-                        contentColor = Color.White
-                    ) {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .background(
-                                    brush = Brush.radialGradient(
-                                        colors = listOf(
+                            .clip(SOSButtonShape)
+                            .background(
+                                brush = Brush.radialGradient(
+                                    colors = if (isSosActive) {
+                                        listOf(
                                             SOSRed,
                                             SOSRed.copy(alpha = 0.8f)
                                         )
-                                    )
-                                ),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Warning,
-                                    contentDescription = "SOS",
-                                    tint = Color.White,
-                                    modifier = Modifier.size(56.dp)
+                                    } else {
+                                        listOf(
+                                            SOSRed.copy(alpha = 0.9f),
+                                            SOSRed.copy(alpha = 0.7f)
+                                        )
+                                    }
                                 )
-                                
-                                Spacer(modifier = Modifier.height(8.dp))
-                                
-                                Text(
-                                    text = "SOS",
-                                    style = MaterialTheme.typography.headlineLarge,
-                                    fontWeight = FontWeight.ExtraBold,
-                                    color = Color.White
-                                )
-                            }
-                        }
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Warning,
+                            contentDescription = "SOS",
+                            modifier = Modifier.size(80.dp),
+                            tint = Color.White
+                        )
+                        
+                        Text(
+                            text = "SOS",
+                            style = MaterialTheme.typography.displayLarge,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
+                        )
                     }
                 }
                 
-                // Instructions or status
+                // Press progress indicator (only visible when pressing)
+                if (sosButtonPressed && !isSosActive) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(8.dp)
+                            .clip(RoundedCornerShape(4.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth(pressProgress)
+                                .height(8.dp)
+                                .clip(RoundedCornerShape(4.dp))
+                                .background(SOSRed)
+                        )
+                    }
+                }
+                
+                // Instructions text
                 Text(
                     text = if (isSosActive) {
                         stringResource(id = R.string.sos_activated)
                     } else {
                         stringResource(id = R.string.press_for_sos)
                     },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center,
+                    color = if (isSosActive) SOSRed else MaterialTheme.colorScheme.onSurface
                 )
                 
-                // Status message when active
+                // Cancel button (only visible when SOS is active)
                 AnimatedVisibility(
                     visible = isSosActive,
                     enter = fadeIn() + expandVertically(),
                     exit = fadeOut() + shrinkVertically()
                 ) {
+                    OutlinedButton(
+                        onClick = { showCancelDialog = true },
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = SOSRed
+                        ),
+                        border = BorderStroke(2.dp, SOSRed),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(id = R.string.sos_cancel))
+                    }
+                }
+                
+                // Loading indicator (only visible when sending SOS)
+                AnimatedVisibility(
+                    visible = isSosActive && !showCancelDialog,
+                    enter = fadeIn(),
+                    exit = fadeOut()
+                ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = stringResource(id = R.string.sos_sending),
-                            style = MaterialTheme.typography.bodyLarge,
-                            textAlign = TextAlign.Center,
+                        CircularProgressIndicator(
                             color = SOSRed,
-                            fontWeight = FontWeight.Medium
+                            modifier = Modifier.size(24.dp)
                         )
                         
-                        // Cancel button
-                        OutlinedButton(
-                            onClick = {
-                                isSosActive = false
-                                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                                
-                                // Stop SOS service
-                                val intent = android.content.Intent(context, SOSService::class.java).apply {
-                                    action = SOSService.ACTION_STOP_SOS
-                                }
-                                context.startService(intent)
-                            },
-                            colors = ButtonDefaults.outlinedButtonColors(
-                                contentColor = SOSRed
-                            ),
-                            border = BorderStroke(2.dp, SOSRed),
-                            shape = RoundedCornerShape(24.dp),
-                            modifier = Modifier.shadow(4.dp, RoundedCornerShape(24.dp))
-                        ) {
-                            Text(
-                                text = stringResource(id = R.string.sos_cancel),
-                                style = MaterialTheme.typography.bodyLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
+                        Text(
+                            text = stringResource(id = R.string.sos_sending),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = SOSRed,
+                            textAlign = TextAlign.Center
+                        )
+                    }
+                }
+            }
+        }
+        
+        // Emergency Contacts Section
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = SmallElevation,
+                    shape = CardShape
+                ),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDarkTheme) 
+                    GlassDark 
+                else 
+                    GlassLight
+            ),
+            shape = CardShape
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "Emergency Contacts",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    FloatingActionButton(
+                        onClick = { showAddContactDialog = true },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Add,
+                            contentDescription = "Add Contact",
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
+                
+                if (isLoadingContacts) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                } else if (emergencyContacts.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(100.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "No emergency contacts added yet",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                } else {
+                    emergencyContacts.forEach { contact ->
+                        EmergencyContactItem(contact = contact)
                     }
                 }
             }
@@ -404,92 +554,21 @@ fun SOSContent(paddingValues: PaddingValues) {
             modifier = Modifier
                 .fillMaxWidth()
                 .shadow(
-                    elevation = MediumElevation,
+                    elevation = SmallElevation,
                     shape = CardShape
                 ),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
+                containerColor = if (isDarkTheme) 
+                    GlassDark 
+                else 
+                    GlassLight
             ),
             shape = CardShape
         ) {
             Column(
-                modifier = Modifier.padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                Text(
-                    text = stringResource(id = R.string.nearby_hospitals),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                // Map placeholder with enhanced styling
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(180.dp)
-                        .clip(RoundedCornerShape(16.dp))
-                        .shadow(SmallElevation, RoundedCornerShape(16.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(
-                                    MaterialTheme.colorScheme.surfaceVariant,
-                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.7f)
-                                )
-                            )
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(56.dp)
-                        )
-                        
-                        Spacer(modifier = Modifier.height(8.dp))
-                        
-                        Text(
-                            text = "Map will display nearby hospitals",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-                
-                // Additional info text
-                Text(
-                    text = "Your location will be shared with emergency services",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        }
-        
-        // Emergency Contacts Section
-        Card(
-            modifier = Modifier
-                .fillMaxWidth()
-                .shadow(
-                    elevation = MediumElevation,
-                    shape = CardShape
-                ),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface
-            ),
-            shape = CardShape
-        ) {
-            Column(
-                modifier = Modifier.padding(20.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Row(
@@ -498,88 +577,50 @@ fun SOSContent(paddingValues: PaddingValues) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = stringResource(id = R.string.emergency_contacts),
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "Nearby Hospitals",
+                        style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold
                     )
                     
-                    // Add contact button with enhanced styling
-                    FloatingActionButton(
-                        onClick = { showAddContactDialog = true },
-                        modifier = Modifier
-                            .size(48.dp)
-                            .shadow(SmallElevation, CircleShape),
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    Button(
+                        onClick = onNavigateToHealthcareMap,
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                        ),
+                        modifier = Modifier.height(36.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "Add Contact",
-                            modifier = Modifier.size(24.dp)
-                        )
+                        Text("View All")
                     }
                 }
                 
-                // Loading state
-                if (isLoadingContacts) {
+                if (isLoadingHospitals) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp),
+                            .height(100.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         CircularProgressIndicator()
                     }
-                } else if (emergencyContacts.isEmpty()) {
-                    // Empty state
+                } else if (nearbyHospitals.isEmpty()) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(120.dp),
+                            .height(100.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            text = "No emergency contacts added yet",
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                            textAlign = TextAlign.Center
+                            text = "No nearby hospitals found",
+                            style = MaterialTheme.typography.bodyMedium,
+                            textAlign = TextAlign.Center,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
                     }
                 } else {
-                    // Contact list with enhanced styling
-                    emergencyContacts.forEach { contact ->
-                        EmergencyContactItem(
-                            contact = contact,
-                            onCallClick = {
-                                // Call the contact
-                                val intent = Intent(Intent.ACTION_DIAL).apply {
-                                    data = Uri.parse("tel:${contact.phone}")
-                                }
-                                context.startActivity(intent)
-                            }
-                        )
+                    nearbyHospitals.forEach { hospital ->
+                        HospitalItem(hospital = hospital)
                     }
-                }
-                
-                // Add a button to add more contacts
-                Button(
-                    onClick = { showAddContactDialog = true },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 8.dp)
-                        .shadow(SmallElevation, RoundedCornerShape(24.dp)),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = SunGold,
-                        contentColor = Color.White
-                    ),
-                    shape = RoundedCornerShape(24.dp)
-                ) {
-                    Text(
-                        text = "Manage Emergency Contacts",
-                        style = MaterialTheme.typography.bodyLarge,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
                 }
             }
         }
@@ -589,12 +630,11 @@ fun SOSContent(paddingValues: PaddingValues) {
     if (showAddContactDialog) {
         AddContactDialog(
             onDismiss = { showAddContactDialog = false },
-            onAddContact = { name, phone, relationship ->
-                // Add contact to Firestore
+            onSave = { name, phone, relationship ->
+                // Save contact to Firestore
                 val currentUser = FirebaseAuth.getInstance().currentUser
-                
                 if (currentUser != null) {
-                    val newContact = hashMapOf(
+                    val contact = hashMapOf(
                         "name" to name,
                         "phone" to phone,
                         "relationship" to relationship
@@ -603,60 +643,280 @@ fun SOSContent(paddingValues: PaddingValues) {
                     FirebaseFirestore.getInstance().collection("users")
                         .document(currentUser.uid)
                         .collection("emergency_contacts")
-                        .add(newContact)
+                        .add(contact)
                         .addOnSuccessListener {
-                            // Refresh contacts list
-                            isLoadingContacts = true
-                            FirebaseFirestore.getInstance().collection("users")
-                                .document(currentUser.uid)
-                                .collection("emergency_contacts")
-                                .get()
-                                .addOnSuccessListener { documents ->
-                                    val contacts = documents.map { document ->
-                                        EmergencyContact(
-                                            name = document.getString("name") ?: "",
-                                            phone = document.getString("phone") ?: "",
-                                            relationship = document.getString("relationship") ?: ""
-                                        )
-                                    }
-                                    emergencyContacts = contacts
-                                    isLoadingContacts = false
-                                }
+                            // Add to local list
+                            emergencyContacts = emergencyContacts + EmergencyContact(name, phone, relationship)
+                            showAddContactDialog = false
                         }
                 }
-                
-                showAddContactDialog = false
             }
         )
+    }
+    
+    // Cancel SOS Dialog
+    if (showCancelDialog) {
+        Dialog(onDismissRequest = { showCancelDialog = false }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text(
+                        text = "Cancel SOS Alert?",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = "Are you sure you want to cancel the SOS alert? This will stop sending your location to emergency contacts.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                    
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showCancelDialog = false },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("No, Keep Active")
+                        }
+                        
+                        Button(
+                            onClick = {
+                                isSosActive = false
+                                showCancelDialog = false
+                                
+                                // Stop SOS service
+                                val intent = Intent(context, SOSService::class.java).apply {
+                                    action = SOSService.ACTION_STOP_SOS
+                                }
+                                context.startService(intent)
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = SOSRed
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Yes, Cancel SOS")
+                        }
+                    }
+                }
+            }
+        }
     }
     
     // Handle SOS button press timing
     LaunchedEffect(sosButtonPressed) {
         if (sosButtonPressed) {
-            delay(2000) // 2 seconds threshold for better UX
-            if (System.currentTimeMillis() - sosButtonPressStartTime >= 2000) {
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            // Animate progress over 3 seconds
+            val startTime = System.currentTimeMillis()
+            val duration = 3000L
+            
+            while (sosButtonPressed && System.currentTimeMillis() - startTime < duration) {
+                val elapsed = System.currentTimeMillis() - startTime
+                pressProgress = (elapsed.toFloat() / duration.toFloat()).coerceIn(0f, 1f)
+                delay(16) // ~60fps
+            }
+            
+            if (sosButtonPressed) {
+                // Button was held for 3 seconds, activate SOS
                 isSosActive = true
+                sosButtonPressed = false
+                pressProgress = 0f
                 
                 // Start SOS service
-                val intent = android.content.Intent(context, SOSService::class.java).apply {
+                val intent = Intent(context, SOSService::class.java).apply {
                     action = SOSService.ACTION_START_SOS
-                    putExtra(SOSService.EXTRA_USER_ID, FirebaseAuth.getInstance().currentUser?.uid ?: "")
+                    putExtra(SOSService.EXTRA_USER_ID, FirebaseAuth.getInstance().currentUser?.uid)
                 }
                 context.startService(intent)
+            } else {
+                // Button was released before 3 seconds
+                pressProgress = 0f
             }
-            sosButtonPressed = false
         }
     }
 }
 
 /**
- * Add Contact Dialog composable.
+ * Emergency contact item composable.
+ */
+@Composable
+fun EmergencyContactItem(contact: EmergencyContact) {
+    val context = LocalContext.current
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = SmallElevation,
+                shape = RoundedCornerShape(12.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+                
+                Column {
+                    Text(
+                        text = contact.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = contact.relationship,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            
+            IconButton(
+                onClick = {
+                    val intent = Intent(Intent.ACTION_DIAL).apply {
+                        data = Uri.parse("tel:${contact.phone}")
+                    }
+                    context.startActivity(intent)
+                }
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.Phone,
+                    contentDescription = "Call",
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
+        }
+    }
+}
+
+/**
+ * Hospital item composable.
+ */
+@Composable
+fun HospitalItem(hospital: NearbyHospital) {
+    val context = LocalContext.current
+    
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = SmallElevation,
+                shape = RoundedCornerShape(12.dp)
+            ),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface
+        )
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.secondaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.LocationOn,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+                
+                Column {
+                    Text(
+                        text = hospital.name,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    
+                    Text(
+                        text = hospital.distance,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                    
+                    Text(
+                        text = hospital.address,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                    )
+                }
+            }
+            
+            if (hospital.phone.isNotBlank()) {
+                IconButton(
+                    onClick = {
+                        val intent = Intent(Intent.ACTION_DIAL).apply {
+                            data = Uri.parse("tel:${hospital.phone}")
+                        }
+                        context.startActivity(intent)
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Phone,
+                        contentDescription = "Call",
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * Add contact dialog composable.
  */
 @Composable
 fun AddContactDialog(
     onDismiss: () -> Unit,
-    onAddContact: (name: String, phone: String, relationship: String) -> Unit
+    onSave: (name: String, phone: String, relationship: String) -> Unit
 ) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
@@ -670,7 +930,9 @@ fun AddContactDialog(
             shape = RoundedCornerShape(16.dp)
         ) {
             Column(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
@@ -702,125 +964,23 @@ fun AddContactDialog(
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Button(
+                    OutlinedButton(
                         onClick = onDismiss,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        modifier = Modifier.weight(1f)
                     ) {
                         Text("Cancel")
                     }
                     
-                    Spacer(modifier = Modifier.width(8.dp))
-                    
                     Button(
-                        onClick = { onAddContact(name, phone, relationship) },
+                        onClick = { onSave(name, phone, relationship) },
+                        modifier = Modifier.weight(1f),
                         enabled = name.isNotBlank() && phone.isNotBlank()
                     ) {
-                        Text("Add")
+                        Text("Save")
                     }
                 }
-            }
-        }
-    }
-}
-
-/**
- * Emergency contact item composable with enhanced styling.
- */
-@Composable
-fun EmergencyContactItem(
-    contact: EmergencyContact,
-    onCallClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(
-                elevation = SmallElevation,
-                shape = RoundedCornerShape(16.dp)
-            ),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant,
-            contentColor = MaterialTheme.colorScheme.onSurfaceVariant
-        ),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Contact icon with enhanced styling
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .shadow(SmallElevation, CircleShape)
-                    .background(
-                        brush = Brush.linearGradient(
-                            colors = listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f)
-                            )
-                        ),
-                        shape = CircleShape
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Person,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimary,
-                    modifier = Modifier.size(28.dp)
-                )
-            }
-            
-            // Contact details with enhanced typography
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 16.dp)
-            ) {
-                Text(
-                    text = contact.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold
-                )
-                
-                Text(
-                    text = contact.relationship,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                    fontWeight = FontWeight.Medium
-                )
-                
-                Text(
-                    text = contact.phone,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-            
-            // Call button with enhanced styling
-            IconButton(
-                onClick = onCallClick,
-                modifier = Modifier
-                    .size(48.dp)
-                    .shadow(SmallElevation, CircleShape)
-                    .background(
-                        color = SunGold,
-                        shape = CircleShape
-                    )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Phone,
-                    contentDescription = "Call",
-                    tint = Color.White,
-                    modifier = Modifier.size(24.dp)
-                )
             }
         }
     }

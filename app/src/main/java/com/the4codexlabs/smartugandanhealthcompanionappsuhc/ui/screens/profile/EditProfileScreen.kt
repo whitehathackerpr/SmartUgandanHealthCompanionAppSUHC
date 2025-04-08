@@ -45,6 +45,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -56,6 +57,11 @@ import androidx.navigation.NavController
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.R
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.CardShape
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.GlassDark
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.GlassLight
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.MediumElevation
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.isSystemInDarkTheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -69,6 +75,7 @@ fun EditProfileScreen(navController: NavController) {
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    val isDarkTheme = isSystemInDarkTheme()
     
     // State for user profile data
     var name by remember { mutableStateOf("") }
@@ -114,6 +121,9 @@ fun EditProfileScreen(navController: NavController) {
                     
                     val medicationsList = document.get("medications") as? List<String>
                     medications = medicationsList?.joinToString(", ") ?: ""
+                } else {
+                    // Document doesn't exist yet, initialize with user's display name
+                    name = currentUser.displayName ?: ""
                 }
             } catch (e: Exception) {
                 coroutineScope.launch {
@@ -166,10 +176,10 @@ fun EditProfileScreen(navController: NavController) {
                                     )
                                     
                                     if (result.isSuccess) {
-                                        snackbarHostState.showSnackbar("Profile updated successfully")
+                                        snackbarHostState.showSnackbar(stringResource(id = R.string.profile_updated))
                                         navController.navigateUp()
                                     } else {
-                                        snackbarHostState.showSnackbar("Error: ${result.exceptionOrNull()?.message ?: "Unknown error"}")
+                                        snackbarHostState.showSnackbar("Error: ${result.exceptionOrNull()?.message ?: stringResource(id = R.string.error_unknown)}")
                                     }
                                 } finally {
                                     isSaving = false
@@ -180,7 +190,7 @@ fun EditProfileScreen(navController: NavController) {
                     ) {
                         Icon(
                             imageVector = Icons.Default.Check,
-                            contentDescription = "Save"
+                            contentDescription = stringResource(id = R.string.save)
                         )
                     }
                 },
@@ -229,23 +239,30 @@ fun EditProfileScreen(navController: NavController) {
                 onSaveClick = {
                     coroutineScope.launch {
                         isSaving = true
-                                try {
-                                    saveProfile(
-                                        name = name,
-                                        age = age,
-                                        gender = gender,
-                                        bloodType = bloodType,
-                                        allergies = allergies,
-                                        medicalConditions = medicalConditions,
-                                        medications = medications
-                                    )
-                                    // Success handling is done in the Scaffold
+                        try {
+                            val result = saveProfile(
+                                name = name,
+                                age = age,
+                                gender = gender,
+                                bloodType = bloodType,
+                                allergies = allergies,
+                                medicalConditions = medicalConditions,
+                                medications = medications
+                            )
+                            
+                            if (result.isSuccess) {
+                                snackbarHostState.showSnackbar(stringResource(id = R.string.profile_updated))
+                                navController.navigateUp()
+                            } else {
+                                snackbarHostState.showSnackbar("Error: ${result.exceptionOrNull()?.message ?: stringResource(id = R.string.error_unknown)}")
+                            }
                         } finally {
                             isSaving = false
                         }
                     }
                 },
-                focusManager = focusManager
+                focusManager = focusManager,
+                isDarkTheme = isDarkTheme
             )
         }
     }
@@ -278,7 +295,8 @@ fun EditProfileContent(
     onMedicationsChange: (String) -> Unit,
     isSaving: Boolean,
     onSaveClick: () -> Unit,
-    focusManager: androidx.compose.ui.focus.FocusManager
+    focusManager: androidx.compose.ui.focus.FocusManager,
+    isDarkTheme: Boolean
 ) {
     Column(
         modifier = Modifier
@@ -290,12 +308,20 @@ fun EditProfileContent(
     ) {
         // Personal Information Card
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = MediumElevation,
+                    shape = CardShape
+                ),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = if (isDarkTheme) 
+                    GlassDark 
+                else 
+                    GlassLight,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = CardShape
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
@@ -414,19 +440,27 @@ fun EditProfileContent(
         
         // Medical Information Card
         Card(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .shadow(
+                    elevation = MediumElevation,
+                    shape = CardShape
+                ),
             colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface,
+                containerColor = if (isDarkTheme) 
+                    GlassDark 
+                else 
+                    GlassLight,
                 contentColor = MaterialTheme.colorScheme.onSurface
             ),
-            shape = RoundedCornerShape(16.dp)
+            shape = CardShape
         ) {
             Column(
                 modifier = Modifier.padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 Text(
-                    text = "Medical Information",
+                    text = stringResource(id = R.string.medical_conditions),
                     style = MaterialTheme.typography.titleMedium
                 )
                 
@@ -541,10 +575,26 @@ private suspend fun saveProfile(
     
     // Save to Firestore using coroutines
     return try {
-        FirebaseFirestore.getInstance().collection("users")
-            .document(currentUser.uid)
-            .update(profileData as Map<String, Any>)
-            .await()
+        val db = FirebaseFirestore.getInstance()
+        val userDoc = db.collection("users").document(currentUser.uid)
+        
+        // Check if document exists
+        val document = userDoc.get().await()
+        
+        if (document.exists()) {
+            // Update existing document
+            userDoc.update(profileData as Map<String, Any>).await()
+        } else {
+            // Create new document
+            userDoc.set(profileData).await()
+        }
+        
+        // Update display name in Firebase Auth
+        val profileUpdates = com.google.firebase.auth.UserProfileChangeRequest.Builder()
+            .setDisplayName(name)
+            .build()
+        
+        currentUser.updateProfile(profileUpdates).await()
         
         Result.success(Unit)
     } catch (e: Exception) {

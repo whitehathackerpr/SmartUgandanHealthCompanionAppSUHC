@@ -13,75 +13,24 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.*
 // Import the model class instead of redefining it
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.Symptom
 
 @Composable
-fun SymptomTrackerScreen(navController: NavController) {
-    var showAddDialog by remember { mutableStateOf(false) }
-    var selectedTimeRange by remember { mutableStateOf(TimeRange.WEEK) }
-    
-    val symptoms = remember {
-        listOf(
-            Symptom(
-                "1",
-                "Headache",
-                7,
-                SimpleDateFormat("yyyy-MM-dd").parse("2023-09-01")!!,
-                "Pain in the front of the head, worsened by bright light",
-                listOf("Fatigue", "Nausea")
-            ),
-            Symptom(
-                "2",
-                "Fever",
-                8,
-                SimpleDateFormat("yyyy-MM-dd").parse("2023-09-02")!!,
-                "Temperature 38.5°C, accompanied by chills",
-                listOf("Headache", "Fatigue")
-            ),
-            Symptom(
-                "3",
-                "Cough",
-                5,
-                SimpleDateFormat("yyyy-MM-dd").parse("2023-09-03")!!,
-                "Dry cough, worse at night",
-                listOf("Fatigue")
-            ),
-            Symptom(
-                "4",
-                "Fatigue",
-                6,
-                SimpleDateFormat("yyyy-MM-dd").parse("2023-09-04")!!,
-                "Feeling tired throughout the day",
-                listOf("Headache")
-            ),
-            Symptom(
-                "5",
-                "Nausea",
-                4,
-                SimpleDateFormat("yyyy-MM-dd").parse("2023-09-05")!!,
-                "Mild nausea, no vomiting",
-                listOf("Headache")
-            )
-        )
-    }
-    
-    val filteredSymptoms = when (selectedTimeRange) {
-        TimeRange.WEEK -> symptoms.filter { 
-            val diff = System.currentTimeMillis() - it.date.time
-            diff <= 7 * 24 * 60 * 60 * 1000 
+fun SymptomTrackerScreen(
+    navController: NavController,
+    viewModel: SymptomTrackerViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showErrorSnackbar by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            showErrorSnackbar = true
         }
-        TimeRange.MONTH -> symptoms.filter { 
-            val diff = System.currentTimeMillis() - it.date.time
-            diff <= 30 * 24 * 60 * 60 * 1000 
-        }
-        TimeRange.YEAR -> symptoms.filter { 
-            val diff = System.currentTimeMillis() - it.date.time
-            diff <= 365 * 24 * 60 * 60 * 1000 
-        }
-        TimeRange.ALL -> symptoms
     }
 
     BaseEnhancedScreen(
@@ -117,8 +66,8 @@ fun SymptomTrackerScreen(navController: NavController) {
                     ) {
                         TimeRange.values().forEach { range ->
                             FilterChip(
-                                selected = selectedTimeRange == range,
-                                onClick = { selectedTimeRange = range },
+                                selected = uiState.selectedTimeRange == range.name.lowercase(),
+                                onClick = { viewModel.setTimeRange(range.name.lowercase()) },
                                 label = { Text(range.name) }
                             )
                         }
@@ -154,15 +103,15 @@ fun SymptomTrackerScreen(navController: NavController) {
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
                         SymptomSummaryItem(
-                            count = filteredSymptoms.size,
+                            count = uiState.summaryData.totalSymptoms,
                             label = "Total Symptoms"
                         )
                         SymptomSummaryItem(
-                            count = filteredSymptoms.maxOfOrNull { it.severity } ?: 0,
+                            count = uiState.summaryData.maxSeverity,
                             label = "Max Severity"
                         )
                         SymptomSummaryItem(
-                            count = filteredSymptoms.map { it.name }.distinct().size,
+                            count = uiState.summaryData.mostCommonSymptoms.size,
                             label = "Unique Symptoms"
                         )
                     }
@@ -172,7 +121,14 @@ fun SymptomTrackerScreen(navController: NavController) {
             Spacer(modifier = Modifier.height(16.dp))
             
             // Symptoms List
-            if (filteredSymptoms.isEmpty()) {
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (uiState.symptoms.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -208,8 +164,12 @@ fun SymptomTrackerScreen(navController: NavController) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredSymptoms.sortedByDescending { it.date }) { symptom ->
-                        SymptomCard(symptom = symptom)
+                    items(uiState.symptoms.sortedByDescending { it.date }) { symptom ->
+                        SymptomCard(
+                            symptom = symptom,
+                            onEdit = { viewModel.showAddSymptomDialog(true, symptom) },
+                            onDelete = { viewModel.deleteSymptom(symptom.id) }
+                        )
                     }
                 }
             }
@@ -223,7 +183,7 @@ fun SymptomTrackerScreen(navController: NavController) {
             contentAlignment = Alignment.BottomEnd
         ) {
             FloatingActionButton(
-                onClick = { showAddDialog = true }
+                onClick = { viewModel.showAddSymptomDialog(true) }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Symptom")
             }
@@ -231,11 +191,37 @@ fun SymptomTrackerScreen(navController: NavController) {
     }
     
     // Add Symptom Dialog
-    if (showAddDialog) {
+    if (uiState.showAddSymptomDialog) {
         AddSymptomDialog(
-            onDismiss = { showAddDialog = false },
-            onSave = { /* Handle saving new symptom */ }
+            onDismiss = { viewModel.showAddSymptomDialog(false) },
+            onSave = { name, severity, date, notes, relatedSymptoms ->
+                viewModel.addSymptom(
+                    name = name,
+                    severity = severity,
+                    date = date,
+                    notes = notes,
+                    relatedSymptoms = relatedSymptoms
+                )
+            },
+            symptomToEdit = uiState.symptomToEdit
         )
+    }
+    
+    // Error Snackbar
+    if (showErrorSnackbar && uiState.error != null) {
+        Snackbar(
+            modifier = Modifier.padding(16.dp),
+            action = {
+                TextButton(onClick = { 
+                    showErrorSnackbar = false
+                    viewModel.clearError()
+                }) {
+                    Text("Dismiss")
+                }
+            }
+        ) {
+            Text(uiState.error)
+        }
     }
 }
 
@@ -262,7 +248,11 @@ fun SymptomSummaryItem(count: Int, label: String) {
 }
 
 @Composable
-fun SymptomCard(symptom: Symptom) {
+fun SymptomCard(
+    symptom: Symptom,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -338,8 +328,11 @@ fun SymptomCard(symptom: Symptom) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { /* View details */ }) {
-                    Text("View Details")
+                TextButton(onClick = onEdit) {
+                    Text("Edit")
+                }
+                TextButton(onClick = onDelete) {
+                    Text("Delete")
                 }
             }
         }
@@ -371,15 +364,18 @@ fun SeverityIndicator(severity: Int) {
 @Composable
 fun AddSymptomDialog(
     onDismiss: () -> Unit,
-    onSave: (Symptom) -> Unit
+    onSave: (String, Int, Date, String?, List<String>?) -> Unit,
+    symptomToEdit: Symptom? = null
 ) {
-    var name by remember { mutableStateOf("") }
-    var severity by remember { mutableStateOf(5) }
-    var notes by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(symptomToEdit?.name ?: "") }
+    var severity by remember { mutableStateOf(symptomToEdit?.severity ?: 5) }
+    var notes by remember { mutableStateOf(symptomToEdit?.notes ?: "") }
+    var relatedSymptoms by remember { mutableStateOf(symptomToEdit?.relatedSymptoms ?: emptyList()) }
+    var newRelatedSymptom by remember { mutableStateOf("") }
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Symptom") },
+        title = { Text(if (symptomToEdit != null) "Edit Symptom" else "Add Symptom") },
         text = {
             Column {
                 OutlinedTextField(
@@ -413,23 +409,93 @@ fun AddSymptomDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3
                 )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Text("Related Symptoms")
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Display current related symptoms
+                if (relatedSymptoms.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        relatedSymptoms.forEach { symptom ->
+                            Surface(
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                shape = MaterialTheme.shapes.small
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = symptom,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer
+                                    )
+                                    
+                                    IconButton(
+                                        onClick = {
+                                            relatedSymptoms = relatedSymptoms.filter { it != symptom }
+                                        },
+                                        modifier = Modifier.size(16.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Close,
+                                            contentDescription = "Remove",
+                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                }
+                
+                // Add new related symptom
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = newRelatedSymptom,
+                        onValueChange = { newRelatedSymptom = it },
+                        label = { Text("Add Related Symptom") },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                    
+                    IconButton(
+                        onClick = {
+                            if (newRelatedSymptom.isNotBlank() && !relatedSymptoms.contains(newRelatedSymptom)) {
+                                relatedSymptoms = relatedSymptoms + newRelatedSymptom
+                                newRelatedSymptom = ""
+                            }
+                        }
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = "Add")
+                    }
+                }
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    // Create a new symptom and save it
                     onSave(
-                        Symptom(
-                            id = UUID.randomUUID().toString(),
-                            name = name,
-                            severity = severity,
-                            date = Date(),
-                            notes = notes
-                        )
+                        name,
+                        severity,
+                        symptomToEdit?.date ?: Date(),
+                        notes.takeIf { it.isNotBlank() },
+                        relatedSymptoms.takeIf { it.isNotEmpty() }
                     )
-                    onDismiss()
-                }
+                },
+                enabled = name.isNotBlank()
             ) {
                 Text("Save")
             }

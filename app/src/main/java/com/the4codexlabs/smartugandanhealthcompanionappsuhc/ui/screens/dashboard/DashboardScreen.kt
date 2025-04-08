@@ -1,5 +1,14 @@
 package com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.dashboard
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -13,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,8 +30,11 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.HealthAndSafety
+import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.ArrowForward
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,13 +47,15 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.firestore.FirebaseFirestore
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -50,10 +65,21 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.R
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.main.Screen
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.SmartUgandanHealthCompanionAppSUHCTheme
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.SOSRed
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.GlassLight
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.GlassDark
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.CardShape
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.LargeElevation
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.MediumElevation
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.SmallElevation
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 
 /**
  * Dashboard screen composable.
@@ -62,28 +88,42 @@ import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.theme.SOSRed
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(navController: NavController) {
+    val isDarkTheme = isSystemInDarkTheme()
+    
     Scaffold(
         topBar = {
             TopAppBar(
                 title = {
                     Text(
                         text = stringResource(id = R.string.app_name),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold
+                        )
                     )
+                },
+                actions = {
+                    IconButton(onClick = { navController.navigate(Screen.Profile.route) }) {
+                        Icon(
+                            imageVector = Icons.Filled.Person,
+                            contentDescription = "Profile"
+                        )
+                    }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.primary,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimary
+                    titleContentColor = MaterialTheme.colorScheme.onPrimary,
+                    actionIconContentColor = MaterialTheme.colorScheme.onPrimary
                 )
             )
         }
     ) { paddingValues ->
         DashboardContent(
             paddingValues = paddingValues,
-                onHealthTrackingClick = { navController.navigate(Screen.HealthRecords.route) },
-                onDiagnosisClick = { navController.navigate(Screen.SymptomTracker.route) },
-                onSOSClick = { navController.navigate(Screen.Community.route) },
-            onReminderClick = { /* TODO: Implement reminder dialog */ }
+            onHealthTrackingClick = { navController.navigate(Screen.HealthRecords.route) },
+            onDiagnosisClick = { navController.navigate(Screen.SymptomTracker.route) },
+            onSOSClick = { navController.navigate(Screen.SOS.route) },
+            onReminderClick = { navController.navigate(Screen.MedicationReminder.route) },
+            onHealthcareMapClick = { navController.navigate(Screen.HealthcareMap.route) }
         )
     }
 }
@@ -97,7 +137,8 @@ fun DashboardContent(
     onHealthTrackingClick: () -> Unit,
     onDiagnosisClick: () -> Unit,
     onSOSClick: () -> Unit,
-    onReminderClick: () -> Unit
+    onReminderClick: () -> Unit,
+    onHealthcareMapClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -118,7 +159,8 @@ fun DashboardContent(
             onHealthTrackingClick = onHealthTrackingClick,
             onDiagnosisClick = onDiagnosisClick,
             onSOSClick = onSOSClick,
-            onReminderClick = onReminderClick
+            onReminderClick = onReminderClick,
+            onHealthcareMapClick = onHealthcareMapClick
         )
         
         // Upcoming reminders section
@@ -131,62 +173,86 @@ fun DashboardContent(
  */
 @Composable
 fun WelcomeSection() {
+    val isDarkTheme = isSystemInDarkTheme()
+    
+    // Get current user name from Firebase
+    val userName = remember { mutableStateOf("Loading...") }
+    val greeting = remember { mutableStateOf("") }
+    
+    // Set greeting based on time of day
+    LaunchedEffect(key1 = true) {
+        val calendar = Calendar.getInstance()
+        val hour = calendar.get(Calendar.HOUR_OF_DAY)
+        
+        greeting.value = when {
+            hour < 12 -> "Good Morning"
+            hour < 17 -> "Good Afternoon"
+            else -> "Good Evening"
+        }
+    }
+    
+    // Fetch user data from Firestore
+    LaunchedEffect(key1 = true) {
+        val currentUser = FirebaseAuth.getInstance().currentUser
+        currentUser?.let { user ->
+            // Try to get display name first
+            if (!user.displayName.isNullOrEmpty()) {
+                userName.value = user.displayName!!
+            } else {
+                // If no display name, fetch from Firestore
+                FirebaseFirestore.getInstance().collection("users")
+                    .document(user.uid)
+                    .get()
+                    .addOnSuccessListener { document ->
+                        if (document != null && document.exists()) {
+                            val name = document.getString("name")
+                            if (!name.isNullOrEmpty()) {
+                                userName.value = name
+                            } else {
+                                userName.value = "User"
+                            }
+                        } else {
+                            userName.value = "User"
+                        }
+                    }
+                    .addOnFailureListener {
+                        userName.value = "User"
+                    }
+            }
+        }
+    }
+    
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = MediumElevation,
+                shape = CardShape
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            containerColor = if (isDarkTheme) 
+                GlassDark 
+            else 
+                GlassLight,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = CardShape
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.Start
         ) {
             Text(
-                text = stringResource(id = R.string.welcome),
-                style = MaterialTheme.typography.titleMedium
+                text = greeting.value,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.primary
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
-            
-            // Get current user name from Firebase
-            val userName = remember { mutableStateOf("Loading...") }
-            
-            // Fetch user data from Firestore
-            LaunchedEffect(key1 = true) {
-                val currentUser = FirebaseAuth.getInstance().currentUser
-                currentUser?.let { user ->
-                    // Try to get display name first
-                    if (!user.displayName.isNullOrEmpty()) {
-                        userName.value = user.displayName!!
-                    } else {
-                        // If no display name, fetch from Firestore
-                        FirebaseFirestore.getInstance().collection("users")
-                            .document(user.uid)
-                            .get()
-                            .addOnSuccessListener { document ->
-                                if (document != null && document.exists()) {
-                                    val name = document.getString("name")
-                                    if (!name.isNullOrEmpty()) {
-                                        userName.value = name
-                                    } else {
-                                        userName.value = "User"
-                                    }
-                                } else {
-                                    userName.value = "User"
-                                }
-                            }
-                            .addOnFailureListener {
-                                userName.value = "User"
-                            }
-                    }
-                }
-            }
+            Spacer(modifier = Modifier.height(4.dp))
             
             Text(
                 text = userName.value,
-                style = MaterialTheme.typography.headlineSmall,
+                style = MaterialTheme.typography.headlineMedium,
                 fontWeight = FontWeight.Bold
             )
             
@@ -194,7 +260,8 @@ fun WelcomeSection() {
             
             Text(
                 text = stringResource(id = R.string.app_tagline),
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
             )
         }
     }
@@ -205,6 +272,8 @@ fun WelcomeSection() {
  */
 @Composable
 fun HealthSummarySection() {
+    val isDarkTheme = isSystemInDarkTheme()
+    
     // Get string resources outside of LaunchedEffect
     val mmHgUnit = stringResource(id = R.string.mmHg)
     val mgDlUnit = stringResource(id = R.string.mg_dl)
@@ -262,20 +331,29 @@ fun HealthSummarySection() {
     }
     
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = MediumElevation,
+                shape = CardShape
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            containerColor = if (isDarkTheme) 
+                GlassDark 
+            else 
+                GlassLight,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = CardShape
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.Start
         ) {
             Text(
                 text = stringResource(id = R.string.health_summary),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -287,7 +365,7 @@ fun HealthSummarySection() {
                 color = MaterialTheme.colorScheme.primary
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Blood sugar
             HealthMetricItem(
@@ -296,7 +374,7 @@ fun HealthSummarySection() {
                 color = MaterialTheme.colorScheme.secondary
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Weight
             HealthMetricItem(
@@ -305,7 +383,7 @@ fun HealthSummarySection() {
                 color = MaterialTheme.colorScheme.tertiary
             )
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(12.dp))
             
             // Water intake
             HealthMetricItem(
@@ -333,18 +411,19 @@ fun HealthMetricItem(
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             Box(
                 modifier = Modifier
-                    .size(12.dp)
+                    .size(16.dp)
                     .clip(CircleShape)
                     .background(color)
             )
             
             Text(
                 text = label,
-                style = MaterialTheme.typography.bodyMedium
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
             )
         }
         
@@ -364,84 +443,111 @@ fun QuickActionsSection(
     onHealthTrackingClick: () -> Unit,
     onDiagnosisClick: () -> Unit,
     onSOSClick: () -> Unit,
-    onReminderClick: () -> Unit
+    onReminderClick: () -> Unit,
+    onHealthcareMapClick: () -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxWidth()
-    ) {
+    val isDarkTheme = isSystemInDarkTheme()
+    
+    Column(modifier = Modifier.fillMaxWidth()) {
         Text(
             text = stringResource(id = R.string.quick_actions),
             style = MaterialTheme.typography.titleMedium,
-            modifier = Modifier.padding(bottom = 8.dp)
+            fontWeight = FontWeight.Bold
         )
         
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Track Health
-            QuickActionItem(
-                icon = Icons.Default.Favorite,
-                label = stringResource(id = R.string.track_health_now),
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.weight(1f),
-                onClick = onHealthTrackingClick
-            )
-            
-            // Check Symptoms
-            QuickActionItem(
-                icon = Icons.Default.HealthAndSafety,
-                label = stringResource(id = R.string.check_symptoms),
-                color = MaterialTheme.colorScheme.secondary,
-                modifier = Modifier.weight(1f),
-                onClick = onDiagnosisClick
-            )
-        }
-        
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(12.dp))
         
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            // SOS
-            QuickActionItem(
-                icon = Icons.Default.Warning,
-                label = stringResource(id = R.string.emergency_sos),
-                color = SOSRed,
+            // Health Tracking
+            ActionCard(
+                icon = Icons.Filled.HealthAndSafety,
+                title = stringResource(id = R.string.health_tracking),
+                onClick = onHealthTrackingClick,
                 modifier = Modifier.weight(1f),
-                onClick = onSOSClick
+                color = MaterialTheme.colorScheme.primary
             )
             
-            // Set Reminder
-            QuickActionItem(
-                icon = Icons.Default.Notifications,
-                label = stringResource(id = R.string.set_reminder),
-                color = MaterialTheme.colorScheme.tertiary,
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // Symptom Diagnosis
+            ActionCard(
+                icon = Icons.Filled.Favorite,
+                title = stringResource(id = R.string.symptom_diagnosis),
+                onClick = onDiagnosisClick,
                 modifier = Modifier.weight(1f),
-                onClick = onReminderClick
+                color = MaterialTheme.colorScheme.secondary
             )
         }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Emergency SOS
+            ActionCard(
+                icon = Icons.Filled.Warning,
+                title = stringResource(id = R.string.emergency_sos),
+                onClick = onSOSClick,
+                modifier = Modifier.weight(1f),
+                color = SOSRed
+            )
+            
+            Spacer(modifier = Modifier.width(12.dp))
+            
+            // Medication Reminder
+            ActionCard(
+                icon = Icons.Filled.Notifications,
+                title = stringResource(id = R.string.medication_reminder),
+                onClick = onReminderClick,
+                modifier = Modifier.weight(1f),
+                color = MaterialTheme.colorScheme.tertiary
+            )
+        }
+        
+        Spacer(modifier = Modifier.height(12.dp))
+        
+        // Healthcare Map
+        ActionCard(
+            icon = Icons.Filled.LocationOn,
+            title = stringResource(id = R.string.healthcare_map),
+            onClick = onHealthcareMapClick,
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary
+        )
     }
 }
 
 /**
- * Quick action item composable.
+ * Action card composable.
  */
 @Composable
-fun QuickActionItem(
+fun ActionCard(
     icon: ImageVector,
-    label: String,
-    color: Color,
+    title: String,
+    onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    onClick: () -> Unit
+    color: Color
 ) {
+    val isDarkTheme = isSystemInDarkTheme()
+    
     Card(
         modifier = modifier
-            .height(100.dp)
+            .height(110.dp)
+            .shadow(
+                elevation = SmallElevation,
+                shape = RoundedCornerShape(16.dp)
+            )
             .clickable(onClick = onClick),
         colors = CardDefaults.cardColors(
-            containerColor = color.copy(alpha = 0.15f),
+            containerColor = if (isDarkTheme) 
+                GlassDark 
+            else 
+                GlassLight,
             contentColor = color
         ),
         shape = RoundedCornerShape(16.dp)
@@ -449,7 +555,7 @@ fun QuickActionItem(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(8.dp),
+                .padding(16.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -462,8 +568,8 @@ fun QuickActionItem(
             Spacer(modifier = Modifier.height(8.dp))
             
             Text(
-                text = label,
-                style = MaterialTheme.typography.bodySmall,
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
                 textAlign = TextAlign.Center,
                 fontWeight = FontWeight.Medium
             )
@@ -484,6 +590,8 @@ data class Reminder(
  */
 @Composable
 fun UpcomingRemindersSection() {
+    val isDarkTheme = isSystemInDarkTheme()
+    
     // State for reminders
     val reminders = remember { mutableStateOf<List<Reminder>>(emptyList()) }
     
@@ -537,20 +645,29 @@ fun UpcomingRemindersSection() {
     }
     
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = MediumElevation,
+                shape = CardShape
+            ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-            contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+            containerColor = if (isDarkTheme) 
+                GlassDark 
+            else 
+                GlassLight,
+            contentColor = MaterialTheme.colorScheme.onSurface
         ),
-        shape = RoundedCornerShape(16.dp)
+        shape = CardShape
     ) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(20.dp),
             horizontalAlignment = Alignment.Start
         ) {
             Text(
                 text = stringResource(id = R.string.upcoming_reminders),
-                style = MaterialTheme.typography.titleMedium
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold
             )
             
             Spacer(modifier = Modifier.height(16.dp))
@@ -559,7 +676,7 @@ fun UpcomingRemindersSection() {
                 Text(
                     text = "No upcoming reminders",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f),
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                     modifier = Modifier.fillMaxWidth(),
                     textAlign = TextAlign.Center
                 )
@@ -571,7 +688,7 @@ fun UpcomingRemindersSection() {
                     )
                     
                     if (index < reminders.value.size - 1) {
-                        Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(12.dp))
                     }
                 }
             }
@@ -599,6 +716,7 @@ private fun isDateTomorrow(date: java.util.Date): Boolean {
     
     return date.after(tomorrow.time) && date.before(dayAfterTomorrow.time)
 }
+
 /**
  * Reminder item composable.
  */
@@ -612,15 +730,25 @@ fun ReminderItem(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium
+            )
+            
+            Text(
+                text = time,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+            )
+        }
         
-        Text(
-            text = time,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.7f)
+        Icon(
+            imageVector = Icons.Outlined.ArrowForward,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         )
     }
 }

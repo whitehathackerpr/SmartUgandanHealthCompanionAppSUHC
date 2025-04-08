@@ -87,7 +87,10 @@ fun CommunityScreen(
                     isLoading = uiState.isLoading,
                     searchQuery = uiState.groupSearchQuery,
                     onSearchChange = { viewModel.searchGroups(it) },
-                    onJoinGroup = { viewModel.toggleGroupJoin(it) }
+                    onJoinGroup = { viewModel.toggleGroupJoin(it) },
+                    onCreateGroup = { viewModel.showCreateGroupDialog(true) },
+                    selectedGroupId = uiState.selectedGroupId,
+                    onSelectGroup = { viewModel.selectGroup(it) }
                 )
                 2 -> EventsTab()
             }
@@ -98,14 +101,25 @@ fun CommunityScreen(
     if (uiState.showCreatePostDialog) {
         CreatePostDialog(
             onDismiss = { viewModel.showCreatePostDialog(false) },
-            onCreatePost = { content, tags -> 
-                viewModel.createPost(content, tags)
+            onCreatePost = { content, tags, imageUrls ->
+                viewModel.createPost(content, tags, imageUrls)
+            },
+            groupName = uiState.groups.find { it.id == uiState.selectedGroupId }?.name
+        )
+    }
+
+    // Create Group Dialog
+    if (uiState.showCreateGroupDialog) {
+        CreateGroupDialog(
+            onDismiss = { viewModel.showCreateGroupDialog(false) },
+            onCreateGroup = { name, description, imageUrl ->
+                viewModel.createGroup(name, description, imageUrl)
             }
         )
     }
 
     // Error Snackbar
-    if (showErrorSnackbar) {
+    if (showErrorSnackbar && uiState.error != null) {
         Snackbar(
             modifier = Modifier.padding(16.dp),
             action = {
@@ -117,7 +131,7 @@ fun CommunityScreen(
                 }
             }
         ) {
-            Text(uiState.error ?: "An error occurred")
+            Text(uiState.error)
         }
     }
 }
@@ -129,9 +143,7 @@ fun FeedTab(
     onCreatePost: () -> Unit,
     onLikePost: (CommunityPost) -> Unit
 ) {
-    Box(
-        modifier = Modifier.fillMaxSize()
-    ) {
+    Box(modifier = Modifier.fillMaxSize()) {
         if (isLoading) {
             CircularProgressIndicator(
                 modifier = Modifier.align(Alignment.Center)
@@ -144,30 +156,13 @@ fun FeedTab(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                Icon(
-                    Icons.Default.Forum,
-                    contentDescription = null,
-                    modifier = Modifier.size(72.dp),
-                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                Text(
+                    text = "No posts yet",
+                    style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "No posts yet",
-                    style = MaterialTheme.typography.headlineSmall
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Be the first to share with the community!",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-                Button(
-                    onClick = onCreatePost
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null)
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Create Post")
+                Button(onClick = onCreatePost) {
+                    Text("Create First Post")
                 }
             }
         } else {
@@ -186,11 +181,11 @@ fun FeedTab(
                         Text("Create Post")
                     }
                 }
-
+                
                 items(posts) { post ->
                     PostCard(
                         post = post,
-                        onLike = { onLikePost(post) }
+                        onLikeClick = { onLikePost(post) }
                     )
                 }
             }
@@ -204,23 +199,36 @@ fun GroupsTab(
     isLoading: Boolean,
     searchQuery: String,
     onSearchChange: (String) -> Unit,
-    onJoinGroup: (CommunityGroup) -> Unit
+    onJoinGroup: (CommunityGroup) -> Unit,
+    onCreateGroup: () -> Unit,
+    selectedGroupId: String?,
+    onSelectGroup: (String?) -> Unit
 ) {
-    Column(
-        modifier = Modifier.fillMaxSize()
-    ) {
-        // Search Bar
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = onSearchChange,
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Search and Create Group Row
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            placeholder = { Text("Search groups...") },
-            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
-            singleLine = true
-        )
-
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = onSearchChange,
+                placeholder = { Text("Search groups") },
+                modifier = Modifier.weight(1f),
+                singleLine = true,
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) }
+            )
+            
+            Spacer(modifier = Modifier.width(8.dp))
+            
+            Button(onClick = onCreateGroup) {
+                Icon(Icons.Default.Add, contentDescription = null)
+            }
+        }
+        
         if (isLoading) {
             Box(
                 modifier = Modifier.fillMaxSize(),
@@ -228,31 +236,35 @@ fun GroupsTab(
             ) {
                 CircularProgressIndicator()
             }
+        } else if (selectedGroupId != null) {
+            // Show selected group posts
+            val selectedGroup = groups.find { it.id == selectedGroupId }
+            if (selectedGroup != null) {
+                GroupDetailScreen(
+                    group = selectedGroup,
+                    posts = emptyList(), // This will be populated by the ViewModel
+                    onBackClick = { onSelectGroup(null) },
+                    onCreatePost = { /* Will be handled by the ViewModel */ }
+                )
+            }
         } else if (groups.isEmpty()) {
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center
                 ) {
-                    Icon(
-                        Icons.Default.Groups,
-                        contentDescription = null,
-                        modifier = Modifier.size(72.dp),
-                        tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                    Text(
+                        text = "No groups yet",
+                        style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(16.dp))
-                    if (searchQuery.isNotEmpty()) {
-                        Text(
-                            "No groups found for '$searchQuery'",
-                            style = MaterialTheme.typography.headlineSmall
-                        )
-                    } else {
-                        Text(
-                            "No groups available",
-                            style = MaterialTheme.typography.headlineSmall
-                        )
+                    Button(onClick = onCreateGroup) {
+                        Text("Create First Group")
                     }
                 }
             }
@@ -265,7 +277,112 @@ fun GroupsTab(
                 items(groups) { group ->
                     GroupCard(
                         group = group,
-                        onJoin = { onJoinGroup(group) }
+                        onJoinClick = { onJoinGroup(group) },
+                        onClick = { onSelectGroup(group.id) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GroupDetailScreen(
+    group: CommunityGroup,
+    posts: List<CommunityPost>,
+    onBackClick: () -> Unit,
+    onCreatePost: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Group Header
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = group.name,
+                        style = MaterialTheme.typography.headlineSmall
+                    )
+                    
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = group.description,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${group.memberCount} members",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                    
+                    Text(
+                        text = "Created by ${group.createdBy}",
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                }
+            }
+        }
+        
+        // Create Post Button
+        Button(
+            onClick = onCreatePost,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        ) {
+            Icon(Icons.Default.Add, contentDescription = null)
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("Create Post")
+        }
+        
+        Spacer(modifier = Modifier.height(16.dp))
+        
+        // Posts
+        if (posts.isEmpty()) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "No posts in this group yet",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(posts) { post ->
+                    PostCard(
+                        post = post,
+                        onLikeClick = { /* Will be handled by the ViewModel */ }
                     )
                 }
             }
@@ -276,140 +393,129 @@ fun GroupsTab(
 @Composable
 fun EventsTab() {
     Box(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(16.dp),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(
-                Icons.Default.Event,
-                contentDescription = null,
-                modifier = Modifier.size(72.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-            )
-            Spacer(modifier = Modifier.height(16.dp))
-            Text(
-                "No upcoming events",
-                style = MaterialTheme.typography.headlineSmall
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                "Check back soon for community events!",
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
+        Text(
+            text = "Events feature coming soon",
+            style = MaterialTheme.typography.titleMedium
+        )
     }
 }
 
 @Composable
 fun PostCard(
     post: CommunityPost,
-    onLike: () -> Unit
+    onLikeClick: () -> Unit
 ) {
     Card(
         modifier = Modifier.fillMaxWidth()
     ) {
         Column(
-            modifier = Modifier.padding(16.dp)
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
             // Author info
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Avatar placeholder
-                Surface(
-                    modifier = Modifier.size(40.dp),
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.primaryContainer
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = MaterialTheme.shapes.small
+                        ),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
+                    Text(
+                        text = post.authorName.firstOrNull()?.toString() ?: "?",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 }
                 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
                 
                 Column {
                     Text(
-                        post.authorName,
-                        style = MaterialTheme.typography.titleMedium
+                        text = post.authorName,
+                        style = MaterialTheme.typography.titleSmall
                     )
+                    
                     Text(
-                        formatDate(post.timestamp),
+                        text = formatDate(post.timestamp),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
-            // Content
+            // Post content
             Text(
-                post.content,
-                style = MaterialTheme.typography.bodyLarge
+                text = post.content,
+                style = MaterialTheme.typography.bodyMedium
             )
             
             // Tags
             if (post.tags.isNotEmpty()) {
                 Spacer(modifier = Modifier.height(8.dp))
+                
                 Row(
+                    modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     post.tags.forEach { tag ->
-                        SuggestionChip(
-                            onClick = { },
-                            label = { Text("#$tag") }
+                        AssistChip(
+                            onClick = { /* TODO: Filter by tag */ },
+                            label = { Text(tag) }
                         )
                     }
                 }
             }
             
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             
             // Actions
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
+                TextButton(
+                    onClick = onLikeClick
                 ) {
-                    IconButton(onClick = onLike) {
-                        Icon(
-                            if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = if (post.isLiked) "Unlike" else "Like",
-                            tint = if (post.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
-                        )
-                    }
-                    Text(
-                        "${post.likes}",
-                        style = MaterialTheme.typography.bodyMedium
+                    Icon(
+                        imageVector = if (post.isLiked) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = "Like",
+                        tint = if (post.isLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
                     )
-                    
-                    Spacer(modifier = Modifier.width(16.dp))
-                    
-                    IconButton(onClick = { /* TODO: Show comments */ }) {
-                        Icon(
-                            Icons.Default.Comment,
-                            contentDescription = "Comments"
-                        )
-                    }
-                    Text(
-                        "${post.comments}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("${post.likes}")
                 }
                 
-                IconButton(onClick = { /* TODO: Share post */ }) {
+                TextButton(
+                    onClick = { /* TODO: Show comments */ }
+                ) {
                     Icon(
-                        Icons.Default.Share,
+                        imageVector = Icons.Default.Comment,
+                        contentDescription = "Comment"
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("${post.comments}")
+                }
+                
+                TextButton(
+                    onClick = { /* TODO: Share post */ }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
                         contentDescription = "Share"
                     )
                 }
@@ -421,131 +527,103 @@ fun PostCard(
 @Composable
 fun GroupCard(
     group: CommunityGroup,
-    onJoin: () -> Unit
+    onJoinClick: () -> Unit,
+    onClick: () -> Unit
 ) {
     Card(
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        onClick = onClick
     ) {
-        Column(
-            modifier = Modifier.padding(16.dp)
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    // Group icon placeholder
-                    Surface(
-                        modifier = Modifier.size(48.dp),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                Icons.Default.Groups,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
-                    
-                    Spacer(modifier = Modifier.width(16.dp))
-                    
-                    Column {
-                        Text(
-                            group.name,
-                            style = MaterialTheme.typography.titleLarge
-                        )
-                        Text(
-                            "${group.memberCount} members",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = group.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
                 
-                Button(
-                    onClick = onJoin,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = if (group.isJoined) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Text(if (group.isJoined) "Leave" else "Join")
-                }
+                Spacer(modifier = Modifier.height(4.dp))
+                
+                Text(
+                    text = group.description,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                Text(
+                    text = "${group.memberCount} members",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
             
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.width(16.dp))
             
-            Text(
-                group.description,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis
-            )
+            Button(
+                onClick = onJoinClick,
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = if (group.isJoined) 
+                        MaterialTheme.colorScheme.secondaryContainer 
+                    else 
+                        MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Text(if (group.isJoined) "Joined" else "Join")
+            }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CreatePostDialog(
     onDismiss: () -> Unit,
-    onCreatePost: (content: String, tags: List<String>) -> Unit
+    onCreatePost: (String, List<String>, List<String>) -> Unit,
+    groupName: String? = null
 ) {
     var content by remember { mutableStateOf("") }
-    var tagsInput by remember { mutableStateOf("") }
-
+    var tags by remember { mutableStateOf("") }
+    
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Create Post") },
+        title = { Text(if (groupName != null) "Create Post in $groupName" else "Create Post") },
         text = {
             Column {
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
                     label = { Text("What's on your mind?") },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(150.dp),
-                    maxLines = 7
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
                 )
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 OutlinedTextField(
-                    value = tagsInput,
-                    onValueChange = { tagsInput = it },
+                    value = tags,
+                    onValueChange = { tags = it },
                     label = { Text("Tags (comma separated)") },
-                    modifier = Modifier.fillMaxWidth(),
-                    placeholder = { Text("health, tips, question, etc") },
-                    singleLine = true
+                    modifier = Modifier.fillMaxWidth()
                 )
-                
-                /* TODO: Add image upload functionality
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Start
-                ) {
-                    FilledTonalIconButton(onClick = { /* TODO: Add image */ }) {
-                        Icon(Icons.Default.Image, contentDescription = "Add Image")
-                    }
-                }
-                */
             }
         },
         confirmButton = {
-            Button(
+            TextButton(
                 onClick = {
-                    val tags = tagsInput.split(",")
-                        .map { it.trim() }
-                        .filter { it.isNotEmpty() }
-                    onCreatePost(content, tags)
+                    val tagList = tags.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+                    onCreatePost(content, tagList, emptyList())
                 },
-                enabled = content.isNotEmpty()
+                enabled = content.isNotBlank()
             ) {
                 Text("Post")
             }
@@ -558,14 +636,57 @@ fun CreatePostDialog(
     )
 }
 
-private fun formatDate(date: Date): String {
-    val now = System.currentTimeMillis()
-    val diff = now - date.time
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CreateGroupDialog(
+    onDismiss: () -> Unit,
+    onCreateGroup: (String, String, String?) -> Unit
+) {
+    var name by remember { mutableStateOf("") }
+    var description by remember { mutableStateOf("") }
     
-    return when {
-        diff < 60 * 1000 -> "Just now"
-        diff < 60 * 60 * 1000 -> "${diff / (60 * 1000)}m ago"
-        diff < 24 * 60 * 60 * 1000 -> "${diff / (60 * 60 * 1000)}h ago"
-        else -> SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(date)
-    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Create New Group") },
+        text = {
+            Column {
+                OutlinedTextField(
+                    value = name,
+                    onValueChange = { name = it },
+                    label = { Text("Group Name") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = description,
+                    onValueChange = { description = it },
+                    label = { Text("Description") },
+                    modifier = Modifier.fillMaxWidth(),
+                    minLines = 3
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    onCreateGroup(name, description, null)
+                },
+                enabled = name.isNotBlank() && description.isNotBlank()
+            ) {
+                Text("Create")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Cancel")
+            }
+        }
+    )
+}
+
+private fun formatDate(date: Date): String {
+    val formatter = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+    return formatter.format(date)
 } 

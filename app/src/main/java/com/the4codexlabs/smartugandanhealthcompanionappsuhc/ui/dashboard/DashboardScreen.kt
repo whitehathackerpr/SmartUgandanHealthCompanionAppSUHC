@@ -73,11 +73,20 @@ fun DashboardScreen(
     val screenWidth = configuration.screenWidthDp
     
     val isTablet = screenWidth >= 600
+    val userRepository = remember { UserRepository() }
+    val sosRepository = remember { SOSRepository() }
+    var userProfile by remember { mutableStateOf<UserProfile?>(null) }
+    var showSOSDialog by remember { mutableStateOf(false) }
+    var showErrorDialog by remember { mutableStateOf<String?>(null) }
+    var isTriggeringSOS by remember { mutableStateOf(false) }
 
     var showWelcomeAnimation by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         showWelcomeAnimation = true
+        userRepository.getCurrentUser().collect { profile ->
+            userProfile = profile
+        }
     }
 
     Box(
@@ -95,13 +104,52 @@ fun DashboardScreen(
                 WelcomeHeader(
                     onNotificationsClick = onNotificationsClick,
                     onProfileClick = onProfileClick,
-                    showAnimation = showWelcomeAnimation
+                    showAnimation = showWelcomeAnimation,
+                    userProfile = userProfile
                 )
+            }
+            
+            // SOS Button
+            item {
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp)
+                        .clickable { showSOSDialog = true },
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Warning,
+                            contentDescription = "SOS",
+                            tint = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Text(
+                            text = "SOS Emergency",
+                            style = MaterialTheme.typography.titleLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
             }
             
             // Stats overview
             item {
-                StatsOverview(nextDose = nextDose, todaysMedications = medicationUiState.todayMedications.size)
+                StatsOverview(
+                    nextDose = nextDose,
+                    todaysMedications = medicationUiState.todayMedications.size,
+                    userProfile = userProfile
+                )
             }
             
             // Quick access features
@@ -113,7 +161,6 @@ fun DashboardScreen(
                 )
                 
                 if (isTablet || isLandscape) {
-                    // Use grid for tablets or landscape mode
                     LazyVerticalGrid(
                         columns = GridCells.Adaptive(minSize = 160.dp),
                         contentPadding = PaddingValues(16.dp),
@@ -129,7 +176,6 @@ fun DashboardScreen(
                         }
                     }
                 } else {
-                    // Use scrollable rows for phones in portrait
                     Column(modifier = Modifier.fillMaxWidth()) {
                         val featurePairs = features.chunked(2)
                         featurePairs.forEach { rowFeatures ->
@@ -146,7 +192,6 @@ fun DashboardScreen(
                                         modifier = Modifier.weight(1f)
                                     )
                                 }
-                                // Add empty space if odd number of features
                                 if (rowFeatures.size == 1) {
                                     Spacer(modifier = Modifier.weight(1f))
                                 }
@@ -171,6 +216,76 @@ fun DashboardScreen(
                 )
             }
         }
+        
+        // SOS Dialog
+        if (showSOSDialog) {
+            AlertDialog(
+                onDismissRequest = { showSOSDialog = false },
+                title = { Text("Emergency SOS") },
+                text = { 
+                    Column {
+                        Text("Are you sure you want to trigger the emergency SOS? This will alert your emergency contacts and nearby healthcare providers.")
+                        if (isTriggeringSOS) {
+                            Spacer(modifier = Modifier.height(16.dp))
+                            CircularProgressIndicator(
+                                modifier = Modifier.align(Alignment.CenterHorizontally)
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            isTriggeringSOS = true
+                            // TODO: Get actual location from location services
+                            val dummyLocation = mapOf(
+                                "latitude" to 0.0,
+                                "longitude" to 0.0
+                            )
+                            
+                            // Trigger SOS
+                            sosRepository.triggerSOS(
+                                location = dummyLocation,
+                                description = "Emergency SOS triggered by user"
+                            ).onSuccess {
+                                showSOSDialog = false
+                            }.onFailure { error ->
+                                showErrorDialog = error.message ?: "Failed to trigger SOS"
+                            }
+                            isTriggeringSOS = false
+                        },
+                        enabled = !isTriggeringSOS,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text("Trigger SOS")
+                    }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { showSOSDialog = false },
+                        enabled = !isTriggeringSOS
+                    ) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+        
+        // Error Dialog
+        showErrorDialog?.let { error ->
+            AlertDialog(
+                onDismissRequest = { showErrorDialog = null },
+                title = { Text("Error") },
+                text = { Text(error) },
+                confirmButton = {
+                    TextButton(onClick = { showErrorDialog = null }) {
+                        Text("OK")
+                    }
+                }
+            )
+        }
     }
 }
 
@@ -178,73 +293,68 @@ fun DashboardScreen(
 fun WelcomeHeader(
     onNotificationsClick: () -> Unit,
     onProfileClick: () -> Unit,
-    showAnimation: Boolean = true
+    showAnimation: Boolean,
+    userProfile: UserProfile?
 ) {
-    val currentTime = remember { Calendar.getInstance() }
-    val greeting = when (currentTime.get(Calendar.HOUR_OF_DAY)) {
-        in 0..11 -> "Good Morning"
-        in 12..17 -> "Good Afternoon"
-        else -> "Good Evening"
+    val greeting = when (Calendar.getInstance().get(Calendar.HOUR_OF_DAY)) {
+        in 0..11 -> getTranslation(StringResources.good_morning)
+        in 12..16 -> getTranslation(StringResources.good_afternoon)
+        else -> getTranslation(StringResources.good_evening)
     }
     
-    AnimatedVisibility(
-        visible = showAnimation,
-        enter = fadeIn(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        ) + expandVertically(
-            animationSpec = spring(
-                dampingRatio = Spring.DampingRatioMediumBouncy,
-                stiffness = Spring.StiffnessLow
-            )
-        )
-    ) {
-        Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primaryContainer
-                        )
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.primaryContainer
                     )
                 )
+            )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = getTranslation(StringResources.dashboard),
-                        style = MaterialTheme.typography.headlineMedium.copy(
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
+                Text(
+                    text = getTranslation(StringResources.dashboard),
+                    style = MaterialTheme.typography.headlineMedium.copy(
+                        color = MaterialTheme.colorScheme.onPrimary
                     )
+                )
+                
+                Row {
+                    IconButton(onClick = onNotificationsClick) {
+                        Icon(
+                            imageVector = Icons.Default.Notifications,
+                            contentDescription = "Notifications",
+                            tint = MaterialTheme.colorScheme.onPrimary
+                        )
+                    }
                     
-                    Row {
-                        IconButton(onClick = onNotificationsClick) {
-                            Icon(
-                                imageVector = Icons.Default.Notifications,
-                                contentDescription = "Notifications",
-                                tint = MaterialTheme.colorScheme.onPrimary
-                            )
-                        }
-                        
-                        IconButton(onClick = onProfileClick) {
-                            Surface(
-                                modifier = Modifier.size(32.dp),
-                                shape = CircleShape,
-                                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
-                            ) {
+                    IconButton(onClick = onProfileClick) {
+                        Surface(
+                            modifier = Modifier.size(32.dp),
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.2f)
+                        ) {
+                            if (userProfile?.photoUrl?.isNotEmpty() == true) {
+                                // TODO: Load profile image from URL
+                                Icon(
+                                    imageVector = Icons.Default.Person,
+                                    contentDescription = "Profile",
+                                    tint = MaterialTheme.colorScheme.onPrimary,
+                                    modifier = Modifier.padding(4.dp)
+                                )
+                            } else {
                                 Icon(
                                     imageVector = Icons.Default.Person,
                                     contentDescription = "Profile",
@@ -255,34 +365,38 @@ fun WelcomeHeader(
                         }
                     }
                 }
-                
-                Spacer(modifier = Modifier.height(16.dp))
-                
-                Text(
-                    text = greeting,
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                )
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                
-                Text(
-                    text = "John Doe", // Replace with actual user name
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-                
-                Spacer(modifier = Modifier.height(16.dp))
             }
+            
+            Spacer(modifier = Modifier.height(16.dp))
+            
+            Text(
+                text = greeting,
+                style = MaterialTheme.typography.titleMedium.copy(
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            )
+            
+            Spacer(modifier = Modifier.height(4.dp))
+            
+            Text(
+                text = userProfile?.name ?: getTranslation(StringResources.guest),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    color = MaterialTheme.colorScheme.onPrimary,
+                    fontWeight = FontWeight.Bold
+                )
+            )
+            
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }
 
 @Composable
-fun StatsOverview(nextDose: TimeOfDay?, todaysMedications: Int) {
+fun StatsOverview(
+    nextDose: TimeOfDay?,
+    todaysMedications: Int,
+    userProfile: UserProfile?
+) {
     Row(
         modifier = Modifier
             .fillMaxWidth()

@@ -15,9 +15,12 @@ data class CommunityUiState(
     val groups: List<CommunityGroup> = emptyList(),
     val selectedTab: Int = 0,
     val showCreatePostDialog: Boolean = false,
+    val showCreateGroupDialog: Boolean = false,
     val groupSearchQuery: String = "",
     val isLoading: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val selectedGroupId: String? = null,
+    val groupPosts: List<CommunityPost> = emptyList()
 )
 
 class CommunityViewModel : ViewModel() {
@@ -114,7 +117,12 @@ class CommunityViewModel : ViewModel() {
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, showCreatePostDialog = false) }
             try {
-                repository.createPost(content, tags, imageUrls)
+                val groupId = _uiState.value.selectedGroupId
+                if (groupId != null) {
+                    repository.createGroupPost(groupId, content, tags, imageUrls)
+                } else {
+                    repository.createPost(content, tags, imageUrls)
+                }
                 _uiState.update { it.copy(isLoading = false, error = null) }
                 // Posts will be automatically updated via the Flow
             } catch (e: Exception) {
@@ -122,6 +130,26 @@ class CommunityViewModel : ViewModel() {
                     it.copy(
                         isLoading = false,
                         error = e.message ?: "Failed to create post"
+                    ) 
+                }
+            }
+        }
+    }
+
+    fun createGroup(name: String, description: String, imageUrl: String? = null) {
+        if (name.isBlank()) return
+
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, showCreateGroupDialog = false) }
+            try {
+                repository.createGroup(name, description, imageUrl)
+                _uiState.update { it.copy(isLoading = false, error = null) }
+                // Groups will be automatically updated via the Flow
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to create group"
                     ) 
                 }
             }
@@ -154,12 +182,50 @@ class CommunityViewModel : ViewModel() {
         }
     }
 
+    fun selectGroup(groupId: String?) {
+        _uiState.update { it.copy(selectedGroupId = groupId) }
+        
+        if (groupId != null) {
+            loadGroupPosts(groupId)
+        } else {
+            _uiState.update { it.copy(groupPosts = emptyList()) }
+        }
+    }
+
+    fun loadGroupPosts(groupId: String) {
+        viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true) }
+            try {
+                repository.getGroupPosts(groupId).collect { posts ->
+                    _uiState.update { 
+                        it.copy(
+                            groupPosts = posts,
+                            isLoading = false,
+                            error = null
+                        ) 
+                    }
+                }
+            } catch (e: Exception) {
+                _uiState.update { 
+                    it.copy(
+                        isLoading = false,
+                        error = e.message ?: "Failed to load group posts"
+                    ) 
+                }
+            }
+        }
+    }
+
     fun setSelectedTab(tabIndex: Int) {
         _uiState.update { it.copy(selectedTab = tabIndex) }
     }
 
     fun showCreatePostDialog(show: Boolean) {
         _uiState.update { it.copy(showCreatePostDialog = show) }
+    }
+
+    fun showCreateGroupDialog(show: Boolean) {
+        _uiState.update { it.copy(showCreateGroupDialog = show) }
     }
 
     fun clearError() {

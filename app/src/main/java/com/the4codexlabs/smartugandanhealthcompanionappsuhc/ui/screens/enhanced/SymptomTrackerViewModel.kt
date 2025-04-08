@@ -2,6 +2,7 @@ package com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.the4codexlabs.smartugandanhealthcompanionappsuhc.data.model.Symptom
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.data.repository.SymptomRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -10,75 +11,42 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.*
 
+data class SymptomSummaryData(
+    val totalSymptoms: Int = 0,
+    val maxSeverity: Int = 0,
+    val mostCommonSymptoms: List<String> = emptyList()
+)
+
 data class SymptomTrackerUiState(
     val symptoms: List<Symptom> = emptyList(),
     val selectedTimeRange: String = "week", // "week", "month", "year", "all"
     val showAddSymptomDialog: Boolean = false,
     val symptomToEdit: Symptom? = null,
-    val summaryData: SymptomSummary = SymptomSummary(),
+    val summaryData: SymptomSummaryData = SymptomSummaryData(),
     val isLoading: Boolean = false,
     val error: String? = null
 )
 
-class SymptomTrackerViewModel : ViewModel() {
-    private val repository = SymptomRepository()
+class SymptomTrackerViewModel(
+    private val repository: SymptomRepository
+) : ViewModel() {
     private val _uiState = MutableStateFlow(SymptomTrackerUiState())
     val uiState: StateFlow<SymptomTrackerUiState> = _uiState.asStateFlow()
 
     init {
         loadSymptoms()
-        loadSummaryData()
     }
 
     fun loadSymptoms() {
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                repository.getSymptomsByTimeRange(_uiState.value.selectedTimeRange).collect { symptoms ->
-                    _uiState.update { 
-                        it.copy(
-                            symptoms = symptoms,
-                            isLoading = false,
-                            error = null
-                        ) 
-                    }
-                }
+                val symptoms = repository.getSymptoms()
+                updateSymptomsList(symptoms)
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false,
-                        error = e.message ?: "Failed to load symptoms"
-                    ) 
-                }
-            }
-        }
-    }
-
-    fun loadSummaryData() {
-        viewModelScope.launch {
-            try {
-                val summaryMap = repository.getSymptomSummary(_uiState.value.selectedTimeRange)
-                
-                val summary = SymptomSummary(
-                    totalSymptoms = summaryMap["totalSymptoms"] as? Int ?: 0,
-                    averageSeverity = summaryMap["averageSeverity"] as? Double ?: 0.0,
-                    maxSeverity = summaryMap["maxSeverity"] as? Int ?: 0,
-                    mostCommonSymptoms = summaryMap["symptomCounts"] as? Map<String, Int> ?: emptyMap(),
-                    mostCommonRelatedSymptoms = summaryMap["relatedSymptomCounts"] as? Map<String, Int> ?: emptyMap()
-                )
-                
-                _uiState.update { 
-                    it.copy(
-                        summaryData = summary,
-                        error = null
-                    ) 
-                }
-            } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(
-                        error = e.message ?: "Failed to load summary data"
-                    ) 
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to load symptoms") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
@@ -86,28 +54,24 @@ class SymptomTrackerViewModel : ViewModel() {
     fun setTimeRange(range: String) {
         _uiState.update { it.copy(selectedTimeRange = range) }
         loadSymptoms()
-        loadSummaryData()
+    }
+
+    fun showAddSymptomDialog(show: Boolean, symptom: Symptom? = null) {
+        _uiState.update { it.copy(showAddSymptomDialog = show, symptomToEdit = symptom) }
     }
 
     fun addSymptom(
         name: String,
         severity: Int,
-        date: Date = Date(),
-        notes: String? = null,
-        relatedSymptoms: List<String>? = null
+        date: Date,
+        notes: String?,
+        relatedSymptoms: List<String>?
     ) {
-        if (name.isBlank()) return
-
         viewModelScope.launch {
-            _uiState.update { it.copy(isLoading = true, showAddSymptomDialog = false) }
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val symptom = _uiState.value.symptomToEdit?.copy(
-                    name = name,
-                    severity = severity,
-                    date = date,
-                    notes = notes,
-                    relatedSymptoms = relatedSymptoms
-                ) ?: Symptom(
+                val symptom = Symptom(
+                    id = _uiState.value.symptomToEdit?.id ?: UUID.randomUUID().toString(),
                     name = name,
                     severity = severity,
                     date = date,
@@ -116,50 +80,68 @@ class SymptomTrackerViewModel : ViewModel() {
                 )
                 
                 repository.saveSymptom(symptom)
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false,
-                        symptomToEdit = null,
-                        error = null
-                    ) 
-                }
-                // Symptoms will be automatically updated via Flow
-                loadSummaryData() // Refresh summary data
+                loadSymptoms()
+                showAddSymptomDialog(false)
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(
-                        isLoading = false,
-                        error = e.message ?: "Failed to save symptom"
-                    ) 
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to save symptom") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
             }
         }
     }
 
     fun deleteSymptom(symptomId: String) {
         viewModelScope.launch {
+            _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 repository.deleteSymptom(symptomId)
-                // Symptoms will be automatically updated via Flow
-                loadSummaryData() // Refresh summary data
+                loadSymptoms()
             } catch (e: Exception) {
-                _uiState.update { 
-                    it.copy(error = e.message ?: "Failed to delete symptom") 
-                }
+                _uiState.update { it.copy(error = e.message ?: "Failed to delete symptom") }
+            } finally {
+                _uiState.update { it.copy(isLoading = false) }
             }
-        }
-    }
-
-    fun showAddSymptomDialog(show: Boolean, symptomToEdit: Symptom? = null) {
-        _uiState.update { 
-            it.copy(
-                showAddSymptomDialog = show,
-                symptomToEdit = symptomToEdit
-            ) 
         }
     }
 
     fun clearError() {
         _uiState.update { it.copy(error = null) }
+    }
+
+    private fun updateSymptomsList(symptoms: List<Symptom>) {
+        val filteredSymptoms = when (_uiState.value.selectedTimeRange) {
+            "week" -> symptoms.filter { 
+                val diff = System.currentTimeMillis() - it.date.time
+                diff <= 7 * 24 * 60 * 60 * 1000 
+            }
+            "month" -> symptoms.filter { 
+                val diff = System.currentTimeMillis() - it.date.time
+                diff <= 30 * 24 * 60 * 60 * 1000 
+            }
+            "year" -> symptoms.filter { 
+                val diff = System.currentTimeMillis() - it.date.time
+                diff <= 365 * 24 * 60 * 60 * 1000 
+            }
+            else -> symptoms
+        }
+
+        val summaryData = SymptomSummaryData(
+            totalSymptoms = filteredSymptoms.size,
+            maxSeverity = filteredSymptoms.maxOfOrNull { it.severity } ?: 0,
+            mostCommonSymptoms = filteredSymptoms
+                .groupBy { it.name }
+                .mapValues { it.value.size }
+                .entries
+                .sortedByDescending { it.value }
+                .take(5)
+                .map { it.key }
+        )
+
+        _uiState.update { 
+            it.copy(
+                symptoms = filteredSymptoms,
+                summaryData = summaryData
+            )
+        }
     }
 } 

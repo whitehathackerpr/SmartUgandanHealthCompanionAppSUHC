@@ -14,6 +14,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import java.util.*
+import com.google.firebase.Timestamp
 
 class CommunityRepository {
     private val auth = FirebaseAuth.getInstance()
@@ -177,6 +178,32 @@ class CommunityRepository {
         awaitClose { subscription.remove() }
     }
     
+    // Create a new community group
+    suspend fun createGroup(name: String, description: String, imageUrl: String? = null): String {
+        val groupId = UUID.randomUUID().toString()
+        val newGroup = CommunityGroup(
+            id = groupId,
+            name = name,
+            description = description,
+            memberCount = 1, // Creator is automatically a member
+            imageUrl = imageUrl,
+            isJoined = true,
+            createdBy = userId,
+            createdAt = Date()
+        )
+        
+        // Save the group to Firestore
+        groupsCollection.document(groupId).set(newGroup).await()
+        
+        // Add the creator as a member
+        userJoinedGroupsCollection.document(groupId).set(mapOf(
+            "groupId" to groupId,
+            "joinedAt" to Date()
+        )).await()
+        
+        return groupId
+    }
+    
     // Search groups by name
     fun searchGroups(query: String): Flow<List<CommunityGroup>> = callbackFlow {
         val subscription = groupsCollection
@@ -301,5 +328,27 @@ class CommunityRepository {
             }
         
         awaitClose { subscription.remove() }
+    }
+    
+    // Create a post in a specific group
+    suspend fun createGroupPost(groupId: String, content: String, tags: List<String>, imageUrls: List<String> = emptyList()): String {
+        val postId = UUID.randomUUID().toString()
+        val newPost = CommunityPost(
+            id = postId,
+            authorId = userId,
+            authorName = userName,
+            authorAvatar = auth.currentUser?.photoUrl?.toString(),
+            content = content,
+            timestamp = Date(),
+            likes = 0,
+            comments = 0,
+            isLiked = false,
+            tags = tags,
+            images = imageUrls,
+            groupId = groupId
+        )
+        
+        postsCollection.document(postId).set(newPost).await()
+        return postId
     }
 } 

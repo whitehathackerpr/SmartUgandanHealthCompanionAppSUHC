@@ -76,6 +76,8 @@ class HealthRecordsRepository {
     fun searchHealthRecords(query: String): Flow<List<HealthRecord>> = callbackFlow {
         val subscription = recordsCollection
             .orderBy("title")
+            .startAt(query)
+            .endAt(query + '\uf8ff')
             .addSnapshotListener { snapshot, error ->
                 if (error != null) {
                     // Handle error
@@ -89,11 +91,6 @@ class HealthRecordsRepository {
                         } catch (e: Exception) {
                             null
                         }
-                    }.filter { record ->
-                        record.title.contains(query, ignoreCase = true) ||
-                        record.description?.contains(query, ignoreCase = true) == true ||
-                        record.doctor?.contains(query, ignoreCase = true) == true ||
-                        record.location?.contains(query, ignoreCase = true) == true
                     }
                     trySend(records)
                 }
@@ -112,26 +109,40 @@ class HealthRecordsRepository {
         }
     }
     
-    // Add health record
-    suspend fun addHealthRecord(record: HealthRecord): String {
-        val recordId = record.id.takeIf { it.isNotEmpty() } ?: UUID.randomUUID().toString()
-        val recordWithId = record.copy(id = recordId)
+    // Add a new health record
+    suspend fun addHealthRecord(
+        title: String,
+        type: RecordType,
+        date: Date,
+        description: String? = null,
+        doctor: String? = null,
+        location: String? = null,
+        attachments: List<String> = emptyList()
+    ) {
+        val record = HealthRecord(
+            id = "",  // Firestore will generate this
+            title = title,
+            type = type,
+            date = date,
+            description = description,
+            doctor = doctor,
+            location = location,
+            attachments = attachments
+        )
         
-        recordsCollection.document(recordId).set(recordWithId).await()
-        return recordId
+        recordsCollection.add(record).await()
     }
     
-    // Update health record
-    suspend fun updateHealthRecord(record: HealthRecord): String {
+    // Update an existing health record
+    suspend fun updateHealthRecord(record: HealthRecord) {
         if (record.id.isEmpty()) {
-            throw IllegalArgumentException("Record ID cannot be empty for update operation")
+            throw IllegalArgumentException("Record ID cannot be empty for updates")
         }
         
         recordsCollection.document(record.id).set(record).await()
-        return record.id
     }
     
-    // Delete health record
+    // Delete a health record
     suspend fun deleteHealthRecord(recordId: String) {
         recordsCollection.document(recordId).delete().await()
     }

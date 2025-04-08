@@ -5,7 +5,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -15,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.*
 // Import the model classes instead of redefining them
@@ -22,47 +22,17 @@ import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.RecordType
 
 @Composable
-fun HealthRecordsScreen(navController: NavController) {
-    var selectedFilter by remember { mutableStateOf<RecordType?>(null) }
-    var showAddDialog by remember { mutableStateOf(false) }
-    
-    val records = remember {
-        listOf(
-            HealthRecord(
-                id = "1",
-                title = "COVID-19 Vaccination",
-                type = RecordType.VACCINATION,
-                date = SimpleDateFormat("yyyy-MM-dd").parse("2023-05-15")!!,
-                description = "First dose of COVID-19 vaccine administered at Mulago Hospital."
-            ),
-            HealthRecord(
-                id = "2",
-                title = "Blood Test Results",
-                type = RecordType.LAB_RESULT,
-                date = SimpleDateFormat("yyyy-MM-dd").parse("2023-06-20")!!,
-                description = "Complete blood count and lipid panel. All values within normal range."
-            ),
-            HealthRecord(
-                id = "3",
-                title = "Malaria Treatment",
-                type = RecordType.PRESCRIPTION,
-                date = SimpleDateFormat("yyyy-MM-dd").parse("2023-07-10")!!,
-                description = "Prescribed Coartem for malaria treatment. Completed full course."
-            ),
-            HealthRecord(
-                id = "4",
-                title = "Annual Check-up",
-                type = RecordType.APPOINTMENT,
-                date = SimpleDateFormat("yyyy-MM-dd").parse("2023-08-05")!!,
-                description = "Annual physical examination with Dr. Namukasa. All vitals normal."
-            )
-        )
-    }
-    
-    val filteredRecords = if (selectedFilter != null) {
-        records.filter { it.type == selectedFilter }
-    } else {
-        records
+fun HealthRecordsScreen(
+    navController: NavController,
+    viewModel: HealthRecordsViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showErrorSnackbar by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            showErrorSnackbar = true
+        }
     }
 
     BaseEnhancedScreen(
@@ -87,8 +57,8 @@ fun HealthRecordsScreen(navController: NavController) {
                 ) {
                     // Search Bar
                     OutlinedTextField(
-                        value = "",
-                        onValueChange = { },
+                        value = uiState.searchQuery,
+                        onValueChange = { viewModel.searchRecords(it) },
                         modifier = Modifier.fillMaxWidth(),
                         placeholder = { Text("Search records...") },
                         leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
@@ -110,16 +80,16 @@ fun HealthRecordsScreen(navController: NavController) {
                     ) {
                         item {
                             FilterChip(
-                                selected = selectedFilter == null,
-                                onClick = { selectedFilter = null },
+                                selected = uiState.selectedType == null,
+                                onClick = { viewModel.selectRecordType(null) },
                                 label = { Text("All") }
                             )
                         }
                         
                         items(RecordType.values()) { type ->
                             FilterChip(
-                                selected = selectedFilter == type,
-                                onClick = { selectedFilter = type },
+                                selected = uiState.selectedType == type,
+                                onClick = { viewModel.selectRecordType(type) },
                                 label = { Text(type.name.replace("_", " ")) }
                             )
                         }
@@ -128,7 +98,14 @@ fun HealthRecordsScreen(navController: NavController) {
             }
             
             // Records List
-            if (filteredRecords.isEmpty()) {
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (uiState.records.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -163,8 +140,12 @@ fun HealthRecordsScreen(navController: NavController) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredRecords.sortedByDescending { it.date }) { record ->
-                        HealthRecordCard(record = record)
+                    items(uiState.records.sortedByDescending { it.date }) { record ->
+                        HealthRecordCard(
+                            record = record,
+                            onEdit = { viewModel.showAddRecordDialog(true, record) },
+                            onDelete = { viewModel.deleteHealthRecord(record.id) }
+                        )
                     }
                 }
             }
@@ -178,7 +159,7 @@ fun HealthRecordsScreen(navController: NavController) {
             contentAlignment = Alignment.BottomEnd
         ) {
             FloatingActionButton(
-                onClick = { showAddDialog = true }
+                onClick = { viewModel.showAddRecordDialog(true) }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Record")
             }
@@ -186,16 +167,48 @@ fun HealthRecordsScreen(navController: NavController) {
     }
     
     // Add Record Dialog
-    if (showAddDialog) {
+    if (uiState.showAddRecordDialog) {
         AddHealthRecordDialog(
-            onDismiss = { showAddDialog = false },
-            onSave = { /* Handle saving new record */ }
+            onDismiss = { viewModel.showAddRecordDialog(false) },
+            onSave = { title, type, date, description, doctor, location, attachments ->
+                viewModel.addHealthRecord(
+                    title = title,
+                    type = type,
+                    date = date,
+                    description = description,
+                    doctor = doctor,
+                    location = location,
+                    attachments = attachments
+                )
+            },
+            recordToEdit = uiState.recordToEdit
         )
+    }
+    
+    // Error Snackbar
+    if (showErrorSnackbar && uiState.error != null) {
+        Snackbar(
+            modifier = Modifier.padding(16.dp),
+            action = {
+                TextButton(onClick = { 
+                    showErrorSnackbar = false
+                    viewModel.clearError()
+                }) {
+                    Text("Dismiss")
+                }
+            }
+        ) {
+            Text(uiState.error)
+        }
     }
 }
 
 @Composable
-fun HealthRecordCard(record: HealthRecord) {
+fun HealthRecordCard(
+    record: HealthRecord,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -274,8 +287,11 @@ fun HealthRecordCard(record: HealthRecord) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { /* View details */ }) {
-                    Text("View Details")
+                TextButton(onClick = onEdit) {
+                    Text("Edit")
+                }
+                TextButton(onClick = onDelete) {
+                    Text("Delete")
                 }
             }
         }
@@ -286,15 +302,19 @@ fun HealthRecordCard(record: HealthRecord) {
 @Composable
 fun AddHealthRecordDialog(
     onDismiss: () -> Unit,
-    onSave: (HealthRecord) -> Unit
+    onSave: (String, RecordType, Date, String?, String?, String?, List<String>) -> Unit,
+    recordToEdit: HealthRecord? = null
 ) {
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var selectedType by remember { mutableStateOf(RecordType.VACCINATION) }
+    var title by remember { mutableStateOf(recordToEdit?.title ?: "") }
+    var description by remember { mutableStateOf(recordToEdit?.description ?: "") }
+    var doctor by remember { mutableStateOf(recordToEdit?.doctor ?: "") }
+    var location by remember { mutableStateOf(recordToEdit?.location ?: "") }
+    var selectedType by remember { mutableStateOf(recordToEdit?.type ?: RecordType.GENERAL) }
+    var date by remember { mutableStateOf(recordToEdit?.date ?: Date()) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Health Record") },
+        title = { Text(if (recordToEdit != null) "Edit Health Record" else "Add Health Record") },
         text = {
             Column {
                 OutlinedTextField(
@@ -352,23 +372,40 @@ fun AddHealthRecordDialog(
                     modifier = Modifier.fillMaxWidth(),
                     minLines = 3
                 )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = doctor,
+                    onValueChange = { doctor = it },
+                    label = { Text("Doctor (Optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                OutlinedTextField(
+                    value = location,
+                    onValueChange = { location = it },
+                    label = { Text("Location (Optional)") },
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
         },
         confirmButton = {
             TextButton(
                 onClick = {
-                    // Create a new record and save it
                     onSave(
-                        HealthRecord(
-                            id = UUID.randomUUID().toString(),
-                            title = title,
-                            date = Date(),
-                            type = selectedType,
-                            description = description
-                        )
+                        title,
+                        selectedType,
+                        date,
+                        description.takeIf { it.isNotBlank() },
+                        doctor.takeIf { it.isNotBlank() },
+                        location.takeIf { it.isNotBlank() },
+                        recordToEdit?.attachments ?: emptyList()
                     )
-                    onDismiss()
-                }
+                },
+                enabled = title.isNotBlank()
             ) {
                 Text("Save")
             }

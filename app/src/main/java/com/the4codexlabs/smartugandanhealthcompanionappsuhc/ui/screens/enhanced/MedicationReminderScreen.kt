@@ -13,6 +13,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
+import androidx.lifecycle.viewmodel.compose.viewModel
 import java.text.SimpleDateFormat
 import java.util.*
 // Import the model classes instead of redefining them
@@ -21,72 +22,16 @@ import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.
 import com.the4codexlabs.smartugandanhealthcompanionappsuhc.ui.screens.enhanced.TimeOfDay
 
 @Composable
-fun MedicationReminderScreen(navController: NavController) {
-    var showAddDialog by remember { mutableStateOf(false) }
-    var selectedFilter by remember { mutableStateOf<MedicationFilter>(MedicationFilter.ALL) }
-    
-    val medications = remember {
-        listOf(
-            Medication(
-                id = "1",
-                name = "Amoxicillin",
-                dosage = "500mg",
-                frequency = Frequency.DAILY,
-                times = listOf(TimeOfDay(8, 0), TimeOfDay(20, 0)),
-                startDate = SimpleDateFormat("yyyy-MM-dd").parse("2023-09-01")!!,
-                endDate = SimpleDateFormat("yyyy-MM-dd").parse("2023-09-10")!!,
-                notes = "Take with food",
-                isActive = true
-            ),
-            Medication(
-                id = "2",
-                name = "Metformin",
-                dosage = "850mg",
-                frequency = Frequency.DAILY,
-                times = listOf(TimeOfDay(8, 0), TimeOfDay(14, 0)),
-                startDate = SimpleDateFormat("yyyy-MM-dd").parse("2023-08-15")!!,
-                endDate = null,
-                notes = "Take with meals",
-                isActive = true
-            ),
-            Medication(
-                id = "3",
-                name = "Lisinopril",
-                dosage = "10mg",
-                frequency = Frequency.DAILY,
-                times = listOf(TimeOfDay(8, 0)),
-                startDate = SimpleDateFormat("yyyy-MM-dd").parse("2023-07-20")!!,
-                endDate = null,
-                notes = "Take in the morning",
-                isActive = true
-            ),
-            Medication(
-                id = "4",
-                name = "Vitamin D",
-                dosage = "1000 IU",
-                frequency = Frequency.DAILY,
-                times = listOf(TimeOfDay(8, 0)),
-                startDate = SimpleDateFormat("yyyy-MM-dd").parse("2023-06-10")!!,
-                endDate = null,
-                notes = "Take with breakfast",
-                isActive = true
-            )
-        )
-    }
-    
-    val filteredMedications = when (selectedFilter) {
-        MedicationFilter.ALL -> medications
-        MedicationFilter.ACTIVE -> medications.filter { it.isActive }
-        MedicationFilter.COMPLETED -> medications.filter { !it.isActive }
-        MedicationFilter.TODAY -> medications.filter { 
-            it.isActive && it.times.any { time -> 
-                val now = Calendar.getInstance()
-                val currentHour = now.get(Calendar.HOUR_OF_DAY)
-                val currentMinute = now.get(Calendar.MINUTE)
-                
-                // Check if any medication time is today
-                time.hour > currentHour || (time.hour == currentHour && time.minute > currentMinute)
-            }
+fun MedicationReminderScreen(
+    navController: NavController,
+    viewModel: MedicationReminderViewModel = viewModel()
+) {
+    val uiState by viewModel.uiState.collectAsState()
+    var showErrorSnackbar by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState.error) {
+        if (uiState.error != null) {
+            showErrorSnackbar = true
         }
     }
 
@@ -122,18 +67,11 @@ fun MedicationReminderScreen(navController: NavController) {
                     
                     Spacer(modifier = Modifier.height(16.dp))
                     
-                    val todayMedications = medications.filter { 
-                        it.isActive && it.times.any { time -> 
-                            val now = Calendar.getInstance()
-                            val currentHour = now.get(Calendar.HOUR_OF_DAY)
-                            val currentMinute = now.get(Calendar.MINUTE)
-                            
-                            // Check if any medication time is today
-                            time.hour > currentHour || (time.hour == currentHour && time.minute > currentMinute)
-                        }
-                    }
-                    
-                    if (todayMedications.isEmpty()) {
+                    if (uiState.isLoading) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    } else if (uiState.todayMedications.isEmpty()) {
                         Text(
                             text = "No medications scheduled for today",
                             style = MaterialTheme.typography.bodyMedium,
@@ -141,9 +79,14 @@ fun MedicationReminderScreen(navController: NavController) {
                             textAlign = TextAlign.Center
                         )
                     } else {
-                        todayMedications.forEach { medication ->
-                            TodayMedicationItem(medication = medication)
-                            if (medication != todayMedications.last()) {
+                        uiState.todayMedications.forEach { medication ->
+                            TodayMedicationItem(
+                                medication = medication,
+                                onToggleStatus = { timeOfDay ->
+                                    viewModel.toggleMedicationStatus(medication, timeOfDay)
+                                }
+                            )
+                            if (medication != uiState.todayMedications.last()) {
                                 Divider(
                                     modifier = Modifier.padding(vertical = 8.dp),
                                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.2f)
@@ -161,19 +104,34 @@ fun MedicationReminderScreen(navController: NavController) {
                     .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                MedicationFilter.values().forEach { filter ->
-                    FilterChip(
-                        selected = selectedFilter == filter,
-                        onClick = { selectedFilter = filter },
-                        label = { Text(filter.name) }
-                    )
-                }
+                FilterChip(
+                    selected = uiState.selectedStatusFilter == "all",
+                    onClick = { viewModel.setStatusFilter("all") },
+                    label = { Text("All") }
+                )
+                FilterChip(
+                    selected = uiState.selectedStatusFilter == "taken",
+                    onClick = { viewModel.setStatusFilter("taken") },
+                    label = { Text("Taken") }
+                )
+                FilterChip(
+                    selected = uiState.selectedStatusFilter == "not_taken",
+                    onClick = { viewModel.setStatusFilter("not_taken") },
+                    label = { Text("Not Taken") }
+                )
             }
             
             Spacer(modifier = Modifier.height(16.dp))
             
             // Medications List
-            if (filteredMedications.isEmpty()) {
+            if (uiState.isLoading) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    CircularProgressIndicator()
+                }
+            } else if (uiState.medications.isEmpty()) {
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -209,8 +167,12 @@ fun MedicationReminderScreen(navController: NavController) {
                     contentPadding = PaddingValues(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(filteredMedications) { medication ->
-                        MedicationCard(medication = medication)
+                    items(uiState.medications) { medication ->
+                        MedicationCard(
+                            medication = medication,
+                            onEdit = { viewModel.showAddMedicationDialog(true, medication) },
+                            onToggleStatus = { viewModel.toggleMedicationStatus(medication, it) }
+                        )
                     }
                 }
             }
@@ -224,7 +186,7 @@ fun MedicationReminderScreen(navController: NavController) {
             contentAlignment = Alignment.BottomEnd
         ) {
             FloatingActionButton(
-                onClick = { showAddDialog = true }
+                onClick = { viewModel.showAddMedicationDialog(true) }
             ) {
                 Icon(Icons.Default.Add, contentDescription = "Add Medication")
             }
@@ -232,20 +194,49 @@ fun MedicationReminderScreen(navController: NavController) {
     }
     
     // Add Medication Dialog
-    if (showAddDialog) {
+    if (uiState.showAddMedicationDialog) {
         AddMedicationDialog(
-            onDismiss = { showAddDialog = false },
-            onSave = { /* Handle saving new medication */ }
+            onDismiss = { viewModel.showAddMedicationDialog(false) },
+            onSave = { name, dosage, frequency, times, startDate, endDate, notes, daysOfWeek, daysOfMonth ->
+                viewModel.saveMedication(
+                    name = name,
+                    dosage = dosage,
+                    frequency = frequency,
+                    times = times,
+                    startDate = startDate,
+                    endDate = endDate,
+                    notes = notes,
+                    daysOfWeek = daysOfWeek,
+                    daysOfMonth = daysOfMonth
+                )
+            },
+            medicationToEdit = uiState.medicationToEdit
         )
+    }
+    
+    // Error Snackbar
+    if (showErrorSnackbar && uiState.error != null) {
+        Snackbar(
+            modifier = Modifier.padding(16.dp),
+            action = {
+                TextButton(onClick = { 
+                    showErrorSnackbar = false
+                    viewModel.clearError()
+                }) {
+                    Text("Dismiss")
+                }
+            }
+        ) {
+            Text(uiState.error)
+        }
     }
 }
 
-enum class MedicationFilter {
-    ALL, ACTIVE, COMPLETED, TODAY
-}
-
 @Composable
-fun TodayMedicationItem(medication: Medication) {
+fun TodayMedicationItem(
+    medication: Medication,
+    onToggleStatus: (TimeOfDay) -> Unit
+) {
     val nextDose = medication.times.minByOrNull { time ->
         val now = Calendar.getInstance()
         val currentHour = now.get(Calendar.HOUR_OF_DAY)
@@ -263,6 +254,15 @@ fun TodayMedicationItem(medication: Medication) {
     val timeString = nextDose?.let {
         String.format("%02d:%02d", it.hour, it.minute)
     } ?: "N/A"
+    
+    val today = Calendar.getInstance().apply { 
+        set(Calendar.HOUR_OF_DAY, 0)
+        set(Calendar.MINUTE, 0)
+        set(Calendar.SECOND, 0)
+        set(Calendar.MILLISECOND, 0)
+    }.time.time.toString()
+    
+    val todayStatus = medication.takenStatus[today]
     
     Row(
         modifier = Modifier
@@ -297,11 +297,31 @@ fun TodayMedicationItem(medication: Medication) {
                 color = MaterialTheme.colorScheme.onPrimaryContainer
             )
         }
+        
+        Spacer(modifier = Modifier.width(8.dp))
+        
+        // Add checkboxes for each time of day
+        medication.times.forEach { timeOfDay ->
+            val isTaken = todayStatus?.get(timeOfDay.name) ?: false
+            
+            Checkbox(
+                checked = isTaken,
+                onCheckedChange = { onToggleStatus(timeOfDay) },
+                colors = CheckboxDefaults.colors(
+                    checkedColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    uncheckedColor = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                )
+            )
+        }
     }
 }
 
 @Composable
-fun MedicationCard(medication: Medication) {
+fun MedicationCard(
+    medication: Medication,
+    onEdit: () -> Unit,
+    onToggleStatus: (TimeOfDay) -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
@@ -378,7 +398,7 @@ fun MedicationCard(medication: Medication) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "Start: ${SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(medication.startDate)}",
+                    text = "Start: ${medication.startDate?.let { SimpleDateFormat("MMM dd, yyyy", Locale.getDefault()).format(it) } ?: "Not set"}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -398,7 +418,7 @@ fun MedicationCard(medication: Medication) {
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End
             ) {
-                TextButton(onClick = { /* Edit medication */ }) {
+                TextButton(onClick = onEdit) {
                     Text("Edit")
                 }
                 TextButton(onClick = { /* Toggle active status */ }) {
@@ -409,21 +429,26 @@ fun MedicationCard(medication: Medication) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddMedicationDialog(
     onDismiss: () -> Unit,
-    onSave: (Medication) -> Unit
+    onSave: (String, String, Frequency, List<TimeOfDay>, Date?, Date?, String?, List<Int>?, List<Int>?) -> Unit,
+    medicationToEdit: Medication? = null
 ) {
-    var name by remember { mutableStateOf("") }
-    var dosage by remember { mutableStateOf("") }
-    var frequency by remember { mutableStateOf(Frequency.DAILY) }
-    var notes by remember { mutableStateOf("") }
-    var startDate by remember { mutableStateOf(Date()) }
-    var endDate by remember { mutableStateOf<Date?>(null) }
+    var name by remember { mutableStateOf(medicationToEdit?.name ?: "") }
+    var dosage by remember { mutableStateOf(medicationToEdit?.dosage ?: "") }
+    var frequency by remember { mutableStateOf(medicationToEdit?.frequency ?: Frequency.DAILY) }
+    var notes by remember { mutableStateOf(medicationToEdit?.notes ?: "") }
+    var startDate by remember { mutableStateOf(medicationToEdit?.startDate ?: Date()) }
+    var endDate by remember { mutableStateOf<Date?>(medicationToEdit?.endDate) }
+    var times by remember { mutableStateOf(medicationToEdit?.times ?: listOf(TimeOfDay(8, 0))) }
+    var daysOfWeek by remember { mutableStateOf(medicationToEdit?.daysOfWeek ?: listOf()) }
+    var daysOfMonth by remember { mutableStateOf(medicationToEdit?.daysOfMonth ?: listOf()) }
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Add Medication") },
+        title = { Text(if (medicationToEdit != null) "Edit Medication" else "Add Medication") },
         text = {
             Column {
                 OutlinedTextField(
@@ -445,23 +470,82 @@ fun AddMedicationDialog(
                 Spacer(modifier = Modifier.height(16.dp))
                 
                 Text("Frequency")
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                var expandedFrequency by remember { mutableStateOf(false) }
+                
+                ExposedDropdownMenuBox(
+                    expanded = expandedFrequency,
+                    onExpandedChange = { expandedFrequency = it }
                 ) {
-                    Frequency.values().forEach { freq ->
-                        FilterChip(
-                            selected = frequency == freq,
-                            onClick = { frequency = freq },
-                            label = { Text(freq.name) }
-                        )
+                    OutlinedTextField(
+                        value = frequency.name,
+                        onValueChange = { },
+                        readOnly = true,
+                        label = { Text("Frequency") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedFrequency) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor()
+                    )
+                    
+                    ExposedDropdownMenu(
+                        expanded = expandedFrequency,
+                        onDismissRequest = { expandedFrequency = false }
+                    ) {
+                        Frequency.values().forEach { freq ->
+                            DropdownMenuItem(
+                                text = { Text(text = freq.name) },
+                                onClick = {
+                                    frequency = freq
+                                    expandedFrequency = false
+                                }
+                            )
+                        }
                     }
                 }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
-                Text("Times per day")
-                // Time picker would go here
+                // Time selection
+                Text("Times")
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Display current times
+                times.forEachIndexed { index, time ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text("${index + 1}. ${String.format("%02d:%02d", time.hour, time.minute)}")
+                        
+                        IconButton(onClick = {
+                            times = times.filterIndexed { i, _ -> i != index }
+                        }) {
+                            Icon(Icons.Default.Delete, contentDescription = "Remove time")
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Add time button
+                Button(
+                    onClick = {
+                        // Add a new time (default to next hour)
+                        val now = Calendar.getInstance()
+                        val nextHour = (now.get(Calendar.HOUR_OF_DAY) + 1) % 24
+                        times = times + TimeOfDay(nextHour, 0)
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Add Time")
+                }
                 
                 Spacer(modifier = Modifier.height(16.dp))
                 
@@ -477,21 +561,19 @@ fun AddMedicationDialog(
         confirmButton = {
             TextButton(
                 onClick = {
-                    // Create a new medication and save it
                     onSave(
-                        Medication(
-                            id = UUID.randomUUID().toString(),
-                            name = name,
-                            dosage = dosage,
-                            frequency = frequency,
-                            times = listOf(TimeOfDay(8, 0)), // Default to morning
-                            startDate = startDate,
-                            endDate = endDate,
-                            notes = notes
-                        )
+                        name,
+                        dosage,
+                        frequency,
+                        times,
+                        startDate,
+                        endDate,
+                        notes,
+                        daysOfWeek,
+                        daysOfMonth
                     )
-                    onDismiss()
-                }
+                },
+                enabled = name.isNotBlank() && dosage.isNotBlank()
             ) {
                 Text("Save")
             }
@@ -502,4 +584,9 @@ fun AddMedicationDialog(
             }
         }
     )
+}
+
+private fun formatDate(date: Date): String {
+    val formatter = SimpleDateFormat("MMM d, yyyy", Locale.getDefault())
+    return formatter.format(date)
 } 

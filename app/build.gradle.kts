@@ -119,7 +119,7 @@ dependencies {
     implementation(libs.okhttp.logging)
     
     // Image loading
-    implementation(libs.coil)
+    implementation("io.coil-kt:coil-compose:2.5.0")
     
     // DataStore for preferences
     implementation(libs.androidx.datastore.preferences)
